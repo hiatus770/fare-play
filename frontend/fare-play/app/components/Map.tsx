@@ -15,9 +15,26 @@ const Map = () => {
         map.current = new mapboxgl.Map({
             container: mapContainer.current,
             style: "mapbox://styles/mapbox/dark-v10",
-            center: [-74.5, 40],
+            center: [-74.5, 40], // fallback center
             zoom: 9,
         });
+
+        // Try to get user's location and fly to it
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude } = position.coords;
+                    map.current.flyTo({
+                        center: [longitude, latitude],
+                        zoom: 14,
+                        essential: true,
+                    });
+                },
+                () => {
+                    // If location access denied, do nothing
+                }
+            );
+        }
     }, []);
 
     return (
