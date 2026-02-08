@@ -17,24 +17,39 @@ const Map = () => {
     const [userLocation, setUserLocation] = useState(null);
 
     useEffect(() => {
-        if (map.current) return; // initialize map only once
-        map.current = new mapboxgl.Map({
-            container: mapContainer.current,
-            style: "mapbox://styles/mapbox/dark-v10",
-            center: [-79.3832, 43.6455], // Union Station, Toronto
-            zoom: 14,
+    if (map.current) return;
+
+    map.current = new mapboxgl.Map({
+        container: mapContainer.current,
+        style: "mapbox://styles/mapbox/dark-v10",
+        center: [-79.3832, 43.6455],
+        zoom: 14,
+            // Restrict map bounds to Toronto/GTA polygon
+            maxBounds: [
+                [-79.9646922, 43.4678844], // southwest (bottom left)
+                [-79.0033885, 43.8830605]  // northeast (top right)
+            ]
+    });
+
+    map.current.on("load", () => {
+        map.current.addSource("ttc-stops", {
+            type: "geojson",
+            data: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/1/query?where=1=1&outFields=*&f=geojson"
         });
 
-        // Custom bounding box for Union Station area
-        // [west, south], [east, north]
-        const unionStationBounds = [
-            [-79.992158, 43.4678844], // bottom left
-            [-79.0033885, 43.8830605], // top right
-        ];
-        map.current.setMaxBounds(unionStationBounds);
+        map.current.addLayer({
+            id: "ttc-stops-layer",
+            type: "circle",
+            source: "ttc-stops",
+            paint: {
+                "circle-radius": 4,
+                "circle-opacity": 0.8
+            }
+        });
 
-        // Remove geolocation flyTo: map always starts at Union Station
-    }, []);
+    });
+}, []);
+
 
     const handleSearch = async (e) => {
         e.preventDefault();
