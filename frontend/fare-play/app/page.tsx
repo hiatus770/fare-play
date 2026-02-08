@@ -1,9 +1,6 @@
-import SolanaConnectionTest from './components/solana-connection-test';
+"use client";
+import Map from "./components/Map";
 
 export default function Home() {
-  return (
-    <main className="min-h-screen bg-gray-900 text-white">
-      <SolanaConnectionTest />
-    </main>
-  );
+  return <Map />;
 }
