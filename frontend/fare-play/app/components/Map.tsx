@@ -1,22 +1,35 @@
 "use client";
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
 import 'mapbox-gl/dist/mapbox-gl.css';
+import StopSidebar from "./StopSidebar";
 
-// TODO: Replace with your own Mapbox access token
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "YOUR_MAPBOX_ACCESS_TOKEN";
+
+const API_BASE = "http://localhost:5000";
+
+// Streetcar routes to load stops for
+const STREETCAR_ROUTES = ["501", "504", "510", "512"];
+
+interface Stop {
+    tag: string;
+    title: string;
+    lat: number;
+    lon: number;
+    routes: string[];
+}
 
 const Map = () => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<mapboxgl.Map | null>(null);
-    const [search, setSearch] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState("");
-    const [suggestions, setSuggestions] = useState([]);
-    const [showSuggestions, setShowSuggestions] = useState(false);
-    const [userLocation, setUserLocation] = useState(null);
+    const markersRef = useRef<mapboxgl.Marker[]>([]);
     const [mapLoaded, setMapLoaded] = useState(false);
+    const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
+    const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
+    const [stops, setStops] = useState<Stop[]>([]);
+    const [mapCenter, setMapCenter] = useState<{ lat: number; lon: number }>({ lat: 43.6455, lon: -79.3832 });
 
+    // Initialize map
     useEffect(() => {
         if (map.current) return;
 
@@ -24,215 +37,172 @@ const Map = () => {
             container: mapContainer.current!,
             style: "mapbox://styles/mapbox/dark-v10",
             center: [-79.3832, 43.6455],
-            zoom: 11,
-            // Restrict map bounds to Toronto/GTA polygon
+            zoom: 13,
             maxBounds: [
-                [-79.9646922, 43.4678844], // southwest (bottom left)
-                [-79.0033885, 43.8830605]  // northeast (top right)
+                [-79.9646922, 43.4678844],
+                [-79.0033885, 43.8830605]
             ]
         });
 
         map.current.on("load", () => {
             setMapLoaded(true);
-            
-            // Load TTC Routes from separate layers (Bus=10, Subway=11, Streetcar=12)
-            const routeEndpoints = [
-                { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/10/query?where=1=1&outFields=*&f=geojson", type: "bus", color: "#0088CE", width: 1.5 },
-                { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/11/query?where=1=1&outFields=*&f=geojson", type: "subway", color: "#DA2128", width: 4 },
-                { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/12/query?where=1=1&outFields=*&f=geojson", type: "streetcar", color: "#F8B22D", width: 2.5 }
-            ];
+            loadRouteLines();
+        });
 
-            const mapInstance = map.current!;
-            routeEndpoints.forEach(({ url, type, color, width }) => {
-                fetch(url)
-                    .then(res => res.json())
-                    .then(data => {
-                        console.log(`${type} routes loaded:`, data.features?.length, "routes");
+        // Track map center changes
+        map.current.on("moveend", () => {
+            if (map.current) {
+                const center = map.current.getCenter();
+                setMapCenter({ lat: center.lat, lon: center.lng });
+            }
+        });
+    }, []);
 
-                        const sourceId = `ttc-${type}-routes`;
-                        const layerId = `ttc-${type}-routes-layer`;
+    // Load TTC route lines from Toronto GIS
+    const loadRouteLines = () => {
+        if (!map.current) return;
 
-                        if (!mapInstance.getSource(sourceId)) {
-                            mapInstance.addSource(sourceId, {
-                                type: "geojson",
-                                data: data
-                            });
+        const routeEndpoints = [
+            { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/10/query?where=1=1&outFields=*&f=geojson", type: "bus", color: "#0088CE", width: 1.5 },
+            { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/11/query?where=1=1&outFields=*&f=geojson", type: "subway", color: "#DA2128", width: 4 },
+            { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/12/query?where=1=1&outFields=*&f=geojson", type: "streetcar", color: "#F8B22D", width: 2.5 }
+        ];
 
-                            mapInstance.addLayer({
-                                id: layerId,
-                                type: "line",
-                                source: sourceId,
-                                layout: {
-                                    "line-join": "round",
-                                    "line-cap": "round"
-                                },
-                                paint: {
-                                    "line-color": color,
-                                    "line-width": [
-                                        "interpolate",
-                                        ["linear"],
-                                        ["zoom"],
-                                        10, width * 0.5,
-                                        15, width
-                                    ],
-                                    "line-opacity": 0.9
-                                }
-                            });
-
-                            // Add click handler for routes
-                            mapInstance.on("click", layerId, (e) => {
-                                if (!e.features?.[0]) return;
-                                const properties = e.features[0].properties || {};
-                                const routeTypeName = type.charAt(0).toUpperCase() + type.slice(1);
-
-                                new mapboxgl.Popup()
-                                    .setLngLat(e.lngLat)
-                                    .setHTML(`
-                                        <div style="color: #000; padding: 4px;">
-                                            <strong>${properties.RTE_LABEL || properties.ROUTE_NAME || properties.RTE || "Route"}</strong><br/>
-                                            Type: ${routeTypeName}<br/>
-                                            ${properties.RTE_DESC || properties.ROUTE_DESC || ""}
-                                        </div>
-                                    `)
-                                    .addTo(mapInstance);
-                            });
-
-                            // Change cursor on hover
-                            mapInstance.on("mouseenter", layerId, () => {
-                                mapInstance.getCanvas().style.cursor = "pointer";
-                            });
-                            mapInstance.on("mouseleave", layerId, () => {
-                                mapInstance.getCanvas().style.cursor = "";
-                            });
-                        }
-                    })
-                    .catch(err => {
-                        console.error(`Error loading ${type} routes:`, err);
-                    });
-            });
-
-            // Then add TTC Stops (circles) - these will appear on top
-            fetch("https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/1/query?where=1=1&outFields=*&f=geojson")
+        const mapInstance = map.current!;
+        routeEndpoints.forEach(({ url, type, color, width }) => {
+            fetch(url)
                 .then(res => res.json())
                 .then(data => {
-                    console.log("Stops data loaded:", data.features?.length, "stops");
+                    const sourceId = `ttc-${type}-routes`;
+                    const layerId = `ttc-${type}-routes-layer`;
 
-                    if (!mapInstance.getSource("ttc-stops")) {
-                        mapInstance.addSource("ttc-stops", {
+                    if (!mapInstance.getSource(sourceId)) {
+                        mapInstance.addSource(sourceId, {
                             type: "geojson",
                             data: data
                         });
 
                         mapInstance.addLayer({
-                            id: "ttc-stops-layer",
-                            type: "circle",
-                            source: "ttc-stops",
+                            id: layerId,
+                            type: "line",
+                            source: sourceId,
+                            layout: {
+                                "line-join": "round",
+                                "line-cap": "round"
+                            },
                             paint: {
-                                "circle-radius": [
+                                "line-color": color,
+                                "line-width": [
                                     "interpolate",
                                     ["linear"],
                                     ["zoom"],
-                                    10, 2,
-                                    15, 5
+                                    10, width * 0.5,
+                                    15, width
                                 ],
-                                "circle-color": "#ffffff",
-                                "circle-opacity": 0.9,
-                                "circle-stroke-width": 1,
-                                "circle-stroke-color": "#000000"
+                                "line-opacity": 0.9
                             }
-                        });
-
-                        // Add click handler for stops
-                        mapInstance.on("click", "ttc-stops-layer", (e) => {
-                            if (!e.features?.[0]) return;
-                            const properties = e.features[0].properties || {};
-
-                            new mapboxgl.Popup()
-                                .setLngLat(e.lngLat)
-                                .setHTML(`
-                                    <div style="color: #000; padding: 4px;">
-                                        <strong>${properties.STOP_NAME || "TTC Stop"}</strong><br/>
-                                        Stop ID: ${properties.STOP_ID || "N/A"}
-                                    </div>
-                                `)
-                                .addTo(mapInstance);
-                        });
-
-                        // Change cursor on hover
-                        mapInstance.on("mouseenter", "ttc-stops-layer", () => {
-                            mapInstance.getCanvas().style.cursor = "pointer";
-                        });
-                        mapInstance.on("mouseleave", "ttc-stops-layer", () => {
-                            mapInstance.getCanvas().style.cursor = "";
                         });
                     }
                 })
-                .catch(err => {
-                    console.error("Error loading stops:", err);
-                });
+                .catch(err => console.error(`Error loading ${type} routes:`, err));
         });
+    };
+
+    // Load stops from backend for selected route
+    const loadStopsForRoute = useCallback(async (routeTag: string) => {
+        try {
+            const response = await fetch(`${API_BASE}/route/${routeTag}/stops`);
+            if (!response.ok) throw new Error("Failed to fetch stops");
+            const data = await response.json();
+
+            const newStops: Stop[] = data.stops.map((s: any) => ({
+                tag: s.tag,
+                title: s.title,
+                lat: s.lat,
+                lon: s.lon,
+                routes: [routeTag],
+            }));
+
+            setStops(newStops);
+            return newStops;
+        } catch (err) {
+            console.error("Failed to load stops:", err);
+            return [];
+        }
     }, []);
 
-    const handleSearch = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        setError("");
-        const token = mapboxgl.accessToken;
-        try {
-            const resp = await fetch(
-                `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(search)}.json?access_token=${token}`
-            );
-            const data = await resp.json();
-            if (data.features && data.features.length > 0) {
-                const [lng, lat] = data.features[0].center;
-                map.current.flyTo({ center: [lng, lat], zoom: 14, essential: true });
-            } else {
-                setError("Location not found.");
-            }
-        } catch {
-            setError("Search failed.");
-        }
-        setLoading(false);
-        setShowSuggestions(false);
-    };
-
-    // Fetch suggestions as user types
+    // Update markers when stops change
     useEffect(() => {
-        const token = mapboxgl.accessToken;
-        if (search.length < 2) {
-            setSuggestions([]);
-            setShowSuggestions(false);
-            return;
-        }
-        const fetchSuggestions = async () => {
-            try {
-                let proximity = "";
-                if (userLocation) {
-                    proximity = `&proximity=${userLocation.longitude},${userLocation.latitude}`;
-                }
-                // Toronto/GTA bounding box: [west, south, east, north]
-                const bbox = "&bbox=-80.0,43.3,-78.5,44.0";
-                const resp = await fetch(
-                    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(search)}.json?autocomplete=true${proximity}${bbox}&access_token=${token}`
-                );
-                const data = await resp.json();
-                if (data.features) {
-                    setSuggestions(data.features);
-                    setShowSuggestions(true);
-                }
-            } catch {
-                setSuggestions([]);
-                setShowSuggestions(false);
-            }
-        };
-        fetchSuggestions();
-    }, [search, userLocation]);
+        if (!map.current || !mapLoaded) return;
 
-    const handleSuggestionClick = (feature) => {
-        setSearch(feature.place_name);
-        setShowSuggestions(false);
-        map.current.flyTo({ center: feature.center, zoom: 14, essential: true });
-    };
+        // Clear existing markers
+        markersRef.current.forEach(marker => marker.remove());
+        markersRef.current = [];
+
+        // Add new markers for stops
+        stops.forEach(stop => {
+            const el = document.createElement('div');
+            el.className = 'stop-marker';
+            el.style.width = '14px';
+            el.style.height = '14px';
+            el.style.borderRadius = '50%';
+            el.style.backgroundColor = selectedStop?.tag === stop.tag ? '#4ECDC4' : '#ffffff';
+            el.style.border = '2px solid ' + (selectedStop?.tag === stop.tag ? '#4ECDC4' : '#333');
+            el.style.cursor = 'pointer';
+            el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
+
+            el.addEventListener('mouseenter', () => {
+                el.style.backgroundColor = '#4ECDC4';
+                el.style.borderColor = '#4ECDC4';
+            });
+
+            el.addEventListener('mouseleave', () => {
+                if (selectedStop?.tag !== stop.tag) {
+                    el.style.backgroundColor = '#ffffff';
+                    el.style.borderColor = '#333';
+                }
+            });
+
+            el.addEventListener('click', () => {
+                setSelectedStop(stop);
+                if (map.current) {
+                    map.current.flyTo({
+                        center: [stop.lon, stop.lat],
+                        zoom: 15,
+                        duration: 500
+                    });
+                }
+            });
+
+            const marker = new mapboxgl.Marker(el)
+                .setLngLat([stop.lon, stop.lat])
+                .addTo(map.current!);
+
+            markersRef.current.push(marker);
+        });
+    }, [stops, selectedStop, mapLoaded]);
+
+    // Handle stop selection from sidebar
+    const handleStopSelect = useCallback((stop: Stop | null, routeTag: string | null) => {
+        setSelectedStop(stop);
+        setSelectedRoute(routeTag);
+
+        if (routeTag && !stop) {
+            // Route selected, load its stops
+            loadStopsForRoute(routeTag);
+        } else if (!routeTag) {
+            // Back to routes, clear stops
+            setStops([]);
+        }
+
+        if (stop && map.current) {
+            map.current.flyTo({
+                center: [stop.lon, stop.lat],
+                zoom: 15,
+                duration: 500
+            });
+        }
+    }, [loadStopsForRoute]);
 
     return (
         <>
@@ -247,160 +217,49 @@ const Map = () => {
                 }}
                 ref={mapContainer}
             />
-            <div
-                style={{
-                    position: "fixed",
-                    top: 0,
-                    left: 0,
-                    width: "500px",
-                    height: "100vh",
-                    background: "rgba(40, 40, 40, 0.92)", // dark gray overlay
-                    zIndex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "flex-start",
-                    padding: "48px 32px 32px 32px",
-                    boxShadow: "2px 0 24px rgba(0,0,0,0.25)",
-                }}
-            >
-                <div style={{ width: "100%" }} autoComplete="off">
-                    <div style={{ position: "relative", width: "100%", marginBottom: "18px" }}>
-                        <input
-                            type="text"
-                            placeholder="Search for a place..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            style={{
-                                width: "100%",
-                                padding: "16px 48px 16px 16px",
-                                borderRadius: "10px",
-                                border: "1.5px solid #444",
-                                background: "#222",
-                                color: "#fff",
-                                fontSize: "18px",
-                                outline: "none",
-                            }}
-                            disabled={loading}
-                            onFocus={() => setShowSuggestions(suggestions.length > 0)}
-                            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                        />
-                        {search.length === 0 && (
-                            <span style={{
-                                position: "absolute",
-                                right: "16px",
-                                top: "50%",
-                                transform: "translateY(-50%)",
-                                pointerEvents: "none",
-                                color: "#aaa",
-                                fontSize: "22px",
-                            }}>
-                                {/* Simple magnifying glass SVG icon */}
-                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                                    <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                                </svg>
-                            </span>
-                        )}
-                    </div>
-                    {showSuggestions && suggestions.length > 0 && (
-                        <ul
-                            style={{
-                                width: "100%",
-                                maxHeight: "300px",
-                                background: "#222",
-                                borderRadius: "10px",
-                                boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-                                overflowY: "auto",
-                                zIndex: 2,
-                                margin: 0,
-                                padding: "8px 0",
-                                listStyle: "none",
-                                position: "static",
-                            }}
-                        >
-                            {suggestions.map((feature) => (
-                                <li
-                                    key={feature.id}
-                                    style={{
-                                        padding: "12px 24px",
-                                        cursor: "pointer",
-                                        color: "#fff",
-                                        fontSize: "16px",
-                                        borderBottom: "1px solid #333",
-                                    }}
-                                    onMouseDown={() => handleSuggestionClick(feature)}
-                                >
-                                    {feature.place_name}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
-                </div>
 
-                {/* Legend for route types */}
-                <div style={{
-                    width: "100%",
-                    marginTop: "24px",
-                    background: "#232323",
-                    borderRadius: "8px",
-                    padding: "16px",
-                    color: "#fff",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                }}>
-                    <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Legend</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            <div style={{ width: "40px", height: "3px", background: "#DA2128" }}></div>
-                            <span>Subway</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            <div style={{ width: "40px", height: "2.5px", background: "#F8B22D" }}></div>
-                            <span>Streetcar</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                            <div style={{ width: "40px", height: "2px", background: "#0088CE" }}></div>
-                            <span>Bus</span>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
-                            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ffffff", border: "1px solid #000" }}></div>
-                            <span>Stops</span>
-                        </div>
-                    </div>
-                    <div style={{ marginTop: "12px", fontSize: "13px", color: "#aaa", fontStyle: "italic" }}>
-                        {mapLoaded ? "✓ Map loaded - zoom in to see routes" : "Loading map..."}
-                    </div>
-                </div>
+            <StopSidebar
+                selectedStop={selectedStop}
+                selectedRoute={selectedRoute}
+                onStopSelect={handleStopSelect}
+                mapCenter={mapCenter}
+            />
 
-                {/* Nearby Stops Section */}
-                <div style={{
-                    width: "100%",
-                    marginTop: "24px",
-                    background: "#232323",
-                    borderRadius: "8px",
-                    padding: "16px",
-                    color: "#fff",
-                    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-                }}>
-                    <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Nearby Stops</div>
-                    <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                        <li style={{ padding: "8px 0", borderBottom: "1px solid #333" }}>Stop 1 (placeholder)</li>
-                        <li style={{ padding: "8px 0", borderBottom: "1px solid #333" }}>Stop 2 (placeholder)</li>
-                        <li style={{ padding: "8px 0", borderBottom: "1px solid #333" }}>Stop 3 (placeholder)</li>
-                        <li style={{ padding: "8px 0", borderBottom: "1px solid #333" }}>Stop 4 (placeholder)</li>
-                        <li style={{ padding: "8px 0" }}>Stop 5 (placeholder)</li>
-                    </ul>
+            {/* Legend */}
+            <div style={{
+                position: "fixed",
+                bottom: "24px",
+                right: "24px",
+                background: "rgba(20, 20, 20, 0.95)",
+                borderRadius: "12px",
+                padding: "16px 20px",
+                color: "#fff",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                zIndex: 5,
+                fontSize: "13px",
+            }}>
+                <div style={{ fontWeight: 600, marginBottom: "12px", color: "#888" }}>Map Legend</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div style={{ width: "24px", height: "4px", background: "#DA2128", borderRadius: "2px" }}></div>
+                        <span>Subway</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div style={{ width: "24px", height: "3px", background: "#F8B22D", borderRadius: "2px" }}></div>
+                        <span>Streetcar</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        <div style={{ width: "24px", height: "2px", background: "#0088CE", borderRadius: "2px" }}></div>
+                        <span>Bus</span>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
+                        <div style={{ width: "10px", height: "10px", borderRadius: "50%", background: "#fff", border: "2px solid #333" }}></div>
+                        <span>Stops</span>
+                    </div>
                 </div>
-                
-                {error && (
-                    <div style={{ 
-                        color: "#ff6b6b", 
-                        marginTop: "12px",
-                        padding: "12px",
-                        background: "rgba(255, 107, 107, 0.1)",
-                        borderRadius: "6px",
-                        fontSize: "14px"
-                    }}>
-                        {error}
+                {!mapLoaded && (
+                    <div style={{ marginTop: "10px", fontSize: "11px", color: "#666" }}>
+                        Loading map...
                     </div>
                 )}
             </div>

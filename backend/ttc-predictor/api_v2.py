@@ -5,15 +5,17 @@ Focus: Real-time current status + frozen predictions history
 """
 
 from flask import Flask, jsonify, request
+from flask_cors import CORS
 from datetime import datetime, timedelta
 import requests
 import xml.etree.ElementTree as ET
 from database import PredictionDB
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS for all routes
 db = PredictionDB()
 
-NEXTBUS_BASE_URL = "http://webservices.nextbus.com/service/publicXMLFeed"
+NEXTBUS_BASE_URL = "https://webservices.nextbus.com/service/publicXMLFeed"
 AGENCY = "ttc"
 
 def get_current_predictions(route_tag, stop_tag):
@@ -136,7 +138,7 @@ def get_stop_status(route, stop):
 
 @app.route('/route/<route>/stops', methods=['GET'])
 def list_route_stops(route):
-    """List all stops on a route with their current status"""
+    """List all stops on a route with their coordinates"""
     try:
         params = {
             'command': 'routeConfig',
@@ -149,19 +151,26 @@ def list_route_stops(route):
         route_info = root.find('.//route')
 
         stops = []
+        seen_tags = set()  # Avoid duplicates
         for stop in root.findall('.//stop'):
-            if stop.get('lat') and stop.get('lon'):
+            tag = stop.get('tag')
+            if stop.get('lat') and stop.get('lon') and tag not in seen_tags:
+                seen_tags.add(tag)
                 stops.append({
-                    'tag': stop.get('tag'),
+                    'tag': tag,
                     'title': stop.get('title'),
-                    'link': f"/stop/{route}/{stop.get('tag')}",
+                    'lat': float(stop.get('lat')),
+                    'lon': float(stop.get('lon')),
+                    'stopId': stop.get('stopId'),
+                    'link': f"/stop/{route}/{tag}",
                 })
 
         return jsonify({
             'route': route,
             'route_name': route_info.get('title'),
+            'color': route_info.get('color'),
             'total_stops': len(stops),
-            'stops': stops[:20]  # First 20
+            'stops': stops
         })
     except:
         return jsonify({'error': 'Could not fetch route'}), 404
@@ -268,6 +277,279 @@ def get_history(route, stop):
 
     return jsonify(response)
 
+@app.route('/routes', methods=['GET'])
+def list_all_routes():
+    """Get all available TTC routes"""
+    try:
+        params = {
+            'command': 'routeList',
+            'a': AGENCY,
+        }
+        response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=10)
+        root = ET.fromstring(response.content)
+
+        routes = []
+        for route in root.findall('.//route'):
+            route_tag = route.get('tag')
+            route_name = route.get('title')
+            if route_tag and route_name:
+                routes.append({
+                    'tag': route_tag,
+                    'name': route_name,
+                })
+
+        routes.sort(key=lambda r: r['tag'])
+        return jsonify({
+            'total_routes': len(routes),
+            'routes': routes,
+        })
+    except Exception as e:
+        return jsonify({'error': f'Could not fetch routes: {str(e)}'}), 500
+
+@app.route('/routes/stops', methods=['GET'])
+def get_routes_stops():
+    """Get stops for multiple routes at once (comma-separated route tags)"""
+    try:
+        routes_param = request.args.get('routes', '', type=str)
+        if not routes_param:
+            return jsonify({'error': 'routes parameter required (comma-separated)'}), 400
+
+        route_tags = [r.strip() for r in routes_param.split(',')]
+
+        all_stops = {}
+        route_info = {}
+
+        for route_tag in route_tags:
+            params = {
+                'command': 'routeConfig',
+                'a': AGENCY,
+                'r': route_tag,
+            }
+            try:
+                response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=10)
+                root = ET.fromstring(response.content)
+
+                route_elem = root.find('.//route')
+                if route_elem is not None:
+                    route_info[route_tag] = {
+                        'name': route_elem.get('title'),
+                        'color': route_elem.get('color'),
+                    }
+
+                for stop in root.findall('.//stop'):
+                    tag = stop.get('tag')
+                    lat = stop.get('lat')
+                    lon = stop.get('lon')
+
+                    if tag and lat and lon:
+                        if tag not in all_stops:
+                            all_stops[tag] = {
+                                'tag': tag,
+                                'title': stop.get('title'),
+                                'lat': float(lat),
+                                'lon': float(lon),
+                                'stopId': stop.get('stopId'),
+                                'routes': [],
+                            }
+                        if route_tag not in all_stops[tag]['routes']:
+                            all_stops[tag]['routes'].append(route_tag)
+            except:
+                continue
+
+        stops_list = list(all_stops.values())
+
+        return jsonify({
+            'routes': route_info,
+            'total_stops': len(stops_list),
+            'stops': stops_list,
+        })
+    except Exception as e:
+        return jsonify({'error': f'Could not fetch stops: {str(e)}'}), 500
+
+@app.route('/stops', methods=['GET'])
+def get_all_stops():
+    """Get all unique stops across all routes (limited to top N)"""
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        params = {
+            'command': 'routeList',
+            'a': AGENCY,
+        }
+        response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=10)
+        root = ET.fromstring(response.content)
+
+        all_stops = {}
+
+        for route in root.findall('.//route'):
+            route_tag = route.get('tag')
+            route_name = route.get('title')
+
+            params = {
+                'command': 'routeConfig',
+                'a': AGENCY,
+                'r': route_tag,
+            }
+            try:
+                response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=5)
+                route_root = ET.fromstring(response.content)
+
+                for stop in route_root.findall('.//stop'):
+                    stop_tag = stop.get('tag')
+                    stop_title = stop.get('title')
+
+                    if stop_tag and stop_title:
+                        if stop_tag not in all_stops:
+                            all_stops[stop_tag] = {
+                                'tag': stop_tag,
+                                'title': stop_title,
+                                'lat': float(stop.get('lat', 0)),
+                                'lon': float(stop.get('lon', 0)),
+                                'routes': []
+                            }
+
+                        if route_tag not in all_stops[stop_tag]['routes']:
+                            all_stops[stop_tag]['routes'].append(route_tag)
+            except:
+                continue
+
+        stops_list = list(all_stops.values())
+        stops_list.sort(key=lambda s: s['title'])
+
+        return jsonify({
+            'total_stops': len(stops_list),
+            'stops': stops_list[:limit]
+        })
+    except Exception as e:
+        return jsonify({'error': f'Could not fetch stops: {str(e)}'}), 500
+
+@app.route('/stops/search', methods=['GET'])
+def search_stops():
+    """Search for stops by name"""
+    try:
+        query = request.args.get('q', '', type=str).lower()
+
+        if not query or len(query) < 2:
+            return jsonify({'error': 'Query must be at least 2 characters'}), 400
+
+        params = {
+            'command': 'routeList',
+            'a': AGENCY,
+        }
+        response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=10)
+        root = ET.fromstring(response.content)
+
+        results = []
+
+        for route in root.findall('.//route'):
+            route_tag = route.get('tag')
+            route_name = route.get('title')
+
+            params = {
+                'command': 'routeConfig',
+                'a': AGENCY,
+                'r': route_tag,
+            }
+            try:
+                response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=5)
+                route_root = ET.fromstring(response.content)
+
+                for stop in route_root.findall('.//stop'):
+                    stop_title = stop.get('title', '').lower()
+                    if query in stop_title:
+                        # Check if already in results
+                        existing = next((r for r in results if r['tag'] == stop.get('tag')), None)
+                        if existing:
+                            if route_tag not in existing['routes']:
+                                existing['routes'].append(route_tag)
+                        else:
+                            results.append({
+                                'tag': stop.get('tag'),
+                                'title': stop.get('title'),
+                                'lat': float(stop.get('lat', 0)),
+                                'lon': float(stop.get('lon', 0)),
+                                'routes': [route_tag],
+                            })
+            except:
+                continue
+
+        return jsonify({
+            'query': query,
+            'total_results': len(results),
+            'stops': results[:50]
+        })
+    except Exception as e:
+        return jsonify({'error': f'Could not search stops: {str(e)}'}), 500
+
+@app.route('/stops/nearby', methods=['GET'])
+def get_nearby_stops():
+    """Get stops near a location (geolocation)"""
+    try:
+        lat = request.args.get('lat', type=float)
+        lon = request.args.get('lon', type=float)
+        radius = request.args.get('radius', default=1, type=float)
+
+        if lat is None or lon is None:
+            return jsonify({'error': 'lat and lon required'}), 400
+
+        params = {
+            'command': 'routeList',
+            'a': AGENCY,
+        }
+        response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=10)
+        root = ET.fromstring(response.content)
+
+        nearby_stops = []
+
+        for route in root.findall('.//route'):
+            route_tag = route.get('tag')
+            route_name = route.get('title')
+
+            params = {
+                'command': 'routeConfig',
+                'a': AGENCY,
+                'r': route_tag,
+            }
+            try:
+                response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=5)
+                route_root = ET.fromstring(response.content)
+
+                for stop in route_root.findall('.//stop'):
+                    stop_lat = float(stop.get('lat', 0))
+                    stop_lon = float(stop.get('lon', 0))
+
+                    dlat = abs(stop_lat - lat)
+                    dlon = abs(stop_lon - lon)
+                    distance = ((dlat**2 + dlon**2) ** 0.5) * 111
+
+                    if distance <= radius:
+                        existing = next((s for s in nearby_stops if s['tag'] == stop.get('tag')), None)
+                        if existing:
+                            if route_tag not in existing['routes']:
+                                existing['routes'].append(route_tag)
+                        else:
+                            nearby_stops.append({
+                                'tag': stop.get('tag'),
+                                'title': stop.get('title'),
+                                'lat': stop_lat,
+                                'lon': stop_lon,
+                                'routes': [route_tag],
+                                'distance': round(distance, 2),
+                            })
+            except:
+                continue
+
+        nearby_stops.sort(key=lambda s: s['distance'])
+
+        return jsonify({
+            'lat': lat,
+            'lon': lon,
+            'radius': radius,
+            'total_stops': len(nearby_stops),
+            'stops': nearby_stops[:100]
+        })
+    except Exception as e:
+        return jsonify({'error': f'Could not fetch nearby stops: {str(e)}'}), 500
+
 @app.route('/health', methods=['GET'])
 def health():
     """Health check"""
@@ -281,6 +563,10 @@ def health():
 if __name__ == '__main__':
     print("TTC Real-Time API v2")
     print("Endpoints:")
+    print("  GET  /routes                       - List all TTC routes")
+    print("  GET  /stops                        - Get all unique stops (limit=100)")
+    print("  GET  /stops/search?q=<query>       - Search stops by name")
+    print("  GET  /stops/nearby?lat=X&lon=Y     - Get nearby stops by geolocation")
     print("  GET  /stop/<route>/<stop>          - Current status + frozen history")
     print("  GET  /route/<route>/stops          - List stops on route")
     print("  GET  /compare/<route>/<stop>/<vehicle> - Compare frozen vs current")
