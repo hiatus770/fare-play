@@ -84,6 +84,20 @@ export function useVault() {
         setTxStatus(
           `Deposited! Tx: ${String(signature)?.slice(0, 20)}...`
         );
+
+        // Sync to off-chain balance
+        try {
+          await fetch("/api/balance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              wallet_address: walletAddress,
+              amount_lamports: Number(depositAmount),
+            }),
+          });
+        } catch (syncErr) {
+          console.error("Off-chain balance sync failed:", syncErr);
+        }
       } catch (err: any) {
         console.error("Deposit failed:", err);
         // Log the full error details including transactionPlanResult
@@ -122,6 +136,17 @@ export function useVault() {
       setTxStatus(
         `Withdrawn! Tx: ${String(signature)?.slice(0, 20)}...`
       );
+
+      // Zero out off-chain balance on withdraw
+      try {
+        await fetch("/api/balance", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ wallet_address: walletAddress }),
+        });
+      } catch (syncErr) {
+        console.error("Off-chain balance zero-out failed:", syncErr);
+      }
     } catch (err: any) {
       console.error("Withdraw failed:", err);
       if (err?.transactionPlanResult) {
