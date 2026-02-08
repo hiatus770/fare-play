@@ -1,0 +1,154 @@
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
+import {
+  useWalletConnection,
+  useSendTransaction,
+  useBalance,
+} from "@solana/react-hooks";
+import {
+  getProgramDerivedAddress,
+  getAddressEncoder,
+  getBytesEncoder,
+  type Address,
+} from "@solana/kit";
+import {
+  getDepositInstructionAsync,
+  getWithdrawInstructionAsync,
+  VAULT_PROGRAM_ADDRESS,
+} from "../app/generated/vault";
+
+const LAMPORTS_PER_SOL = 1_000_000_000n;
+
+export function useVault() {
+  const { wallet, status } = useWalletConnection();
+  const { send, isSending } = useSendTransaction();
+
+  const [vaultAddress, setVaultAddress] = useState<Address | null>(null);
+  const [txStatus, setTxStatus] = useState<string | null>(null);
+
+  const walletAddress = wallet?.account.address;
+  const walletStatus = status;
+
+  // Derive vault PDA when wallet connects
+  useEffect(() => {
+    async function deriveVault() {
+      if (!walletAddress) {
+        setVaultAddress(null);
+        return;
+      }
+
+      const [pda] = await getProgramDerivedAddress({
+        programAddress: VAULT_PROGRAM_ADDRESS,
+        seeds: [
+          getBytesEncoder().encode(
+            new Uint8Array([118, 97, 117, 108, 116]) // "vault"
+          ),
+          getAddressEncoder().encode(walletAddress),
+        ],
+      });
+
+      setVaultAddress(pda);
+    }
+
+    deriveVault();
+  }, [walletAddress]);
+
+  // Get vault balance
+  const vaultBalance = useBalance(vaultAddress ?? undefined);
+  const vaultLamports = vaultBalance?.lamports ?? 0n;
+  const vaultSol = Number(vaultLamports) / Number(LAMPORTS_PER_SOL);
+
+  const deposit = useCallback(
+    async (amount: string) => {
+      if (!wallet || !amount) return;
+
+      try {
+        setTxStatus("Building transaction...");
+
+        const depositAmount = BigInt(
+          Math.floor(parseFloat(amount) * Number(LAMPORTS_PER_SOL))
+        );
+
+        const instruction = await getDepositInstructionAsync({
+          signer: wallet.account,
+          amount: depositAmount,
+        });
+
+        setTxStatus("Awaiting signature...");
+
+        const signature = await send({
+          instructions: [instruction],
+        });
+
+        setTxStatus(
+          `Deposited! Tx: ${String(signature)?.slice(0, 20)}...`
+        );
+      } catch (err: any) {
+        console.error("Deposit failed:", err);
+        // Log the full error details including transactionPlanResult
+        if (err?.transactionPlanResult) {
+          console.error("Transaction plan result:", JSON.stringify(err.transactionPlanResult, null, 2));
+        }
+        if (err?.cause) {
+          console.error("Cause:", err.cause);
+        }
+        // Log all enumerable properties
+        console.error("Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+        setTxStatus(
+          `Error: ${err?.message || "Unknown error"}`
+        );
+      }
+    },
+    [wallet, send]
+  );
+
+  const withdraw = useCallback(async () => {
+    if (!wallet) return;
+
+    try {
+      setTxStatus("Building transaction...");
+
+      const instruction = await getWithdrawInstructionAsync({
+        signer: wallet.account,
+      });
+
+      setTxStatus("Awaiting signature...");
+
+      const signature = await send({
+        instructions: [instruction],
+      });
+
+      setTxStatus(
+        `Withdrawn! Tx: ${String(signature)?.slice(0, 20)}...`
+      );
+    } catch (err: any) {
+      console.error("Withdraw failed:", err);
+      if (err?.transactionPlanResult) {
+        console.error("Transaction plan result:", JSON.stringify(err.transactionPlanResult, null, 2));
+      }
+      if (err?.cause) {
+        console.error("Cause:", err.cause);
+      }
+      console.error("Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+      setTxStatus(
+        `Error: ${err?.message || "Unknown error"}`
+      );
+    }
+  }, [wallet, send]);
+
+  const clearStatus = useCallback(() => setTxStatus(null), []);
+
+  return {
+    walletAddress,
+    walletStatus,
+    vaultAddress,
+    vaultSol,
+    vaultLamports,
+    deposit,
+    withdraw,
+    isSending,
+    txStatus,
+    clearStatus,
+  };
+}
