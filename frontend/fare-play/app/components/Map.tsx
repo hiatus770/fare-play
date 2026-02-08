@@ -1,5 +1,6 @@
 "use client";
 import React, { useRef, useEffect, useState } from "react";
+import ReactDOM from "react-dom";
 import mapboxgl from "mapbox-gl";
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -13,9 +14,28 @@ const Map = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [suggestions, setSuggestions] = useState([]);
+    const [stopsData, setStopsData] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [userLocation, setUserLocation] = useState(null);
     const [mapLoaded, setMapLoaded] = useState(false);
+    const [selectedStop, setSelectedStop] = useState(null);
+    const [betTime, setBetTime] = useState("");
+    const [betAmount, setBetAmount] = useState("");
+    const [placingBet, setPlacingBet] = useState(false);
+        const [lobbyCount, setLobbyCount] = useState(0);
+    // Placeholder for bus number logic
+    const getBusNumber = (stop) => {
+        // TODO: Implement actual bus number lookup
+        return "(Bus # placeholder)";
+    };
+
+    // Fetch lobby count when a stop is selected
+    useEffect(() => {
+        if (!selectedStop) return;
+        // TODO: Replace with actual backend call
+        // Simulate fetch with random number for now
+        setLobbyCount(Math.floor(Math.random() * 10) + 1);
+    }, [selectedStop]);
 
     useEffect(() => {
         if (map.current) return;
@@ -116,13 +136,12 @@ const Map = () => {
                 .then(res => res.json())
                 .then(data => {
                     console.log("Stops data loaded:", data.features?.length, "stops");
-
+                    setStopsData(data.features || []);
                     if (!mapInstance.getSource("ttc-stops")) {
                         mapInstance.addSource("ttc-stops", {
                             type: "geojson",
                             data: data
                         });
-
                         mapInstance.addLayer({
                             id: "ttc-stops-layer",
                             type: "circle",
@@ -141,23 +160,15 @@ const Map = () => {
                                 "circle-stroke-color": "#000000"
                             }
                         });
-
                         // Add click handler for stops
                         mapInstance.on("click", "ttc-stops-layer", (e) => {
                             if (!e.features?.[0]) return;
                             const properties = e.features[0].properties || {};
-
-                            new mapboxgl.Popup()
-                                .setLngLat(e.lngLat)
-                                .setHTML(`
-                                    <div style="color: #000; padding: 4px;">
-                                        <strong>${properties.STOP_NAME || "TTC Stop"}</strong><br/>
-                                        Stop ID: ${properties.STOP_ID || "N/A"}
-                                    </div>
-                                `)
-                                .addTo(mapInstance);
+                            setSelectedStop({
+                                stopId: properties.STOP_ID || "N/A",
+                                lngLat: e.lngLat
+                            });
                         });
-
                         // Change cursor on hover
                         mapInstance.on("mouseenter", "ttc-stops-layer", () => {
                             mapInstance.getCanvas().style.cursor = "pointer";
@@ -198,40 +209,33 @@ const Map = () => {
 
     // Fetch suggestions as user types
     useEffect(() => {
-        const token = mapboxgl.accessToken;
         if (search.length < 2) {
             setSuggestions([]);
             setShowSuggestions(false);
             return;
         }
-        const fetchSuggestions = async () => {
-            try {
-                let proximity = "";
-                if (userLocation) {
-                    proximity = `&proximity=${userLocation.longitude},${userLocation.latitude}`;
-                }
-                // Toronto/GTA bounding box: [west, south, east, north]
-                const bbox = "&bbox=-80.0,43.3,-78.5,44.0";
-                const resp = await fetch(
-                    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(search)}.json?autocomplete=true${proximity}${bbox}&access_token=${token}`
-                );
-                const data = await resp.json();
-                if (data.features) {
-                    setSuggestions(data.features);
-                    setShowSuggestions(true);
-                }
-            } catch {
-                setSuggestions([]);
-                setShowSuggestions(false);
-            }
-        };
-        fetchSuggestions();
-    }, [search, userLocation]);
+        // Filter stops by name or stop number
+        const filtered = stopsData.filter(feature => {
+            const props = feature.properties || {};
+            const name = (props.STOP_NAME || "").toLowerCase();
+            const id = (props.STOP_ID || "").toString();
+            const code = (props.STOP_CODE || "").toString();
+            const searchLower = search.toLowerCase();
+            return (
+                name.includes(searchLower) ||
+                id.includes(searchLower) ||
+                code.includes(searchLower)
+            );
+        });
+        setSuggestions(filtered.slice(0, 20)); // limit to 20 suggestions
+        setShowSuggestions(filtered.length > 0);
+    }, [search, stopsData]);
 
     const handleSuggestionClick = (feature) => {
-        setSearch(feature.place_name);
+        const coords = feature.geometry.coordinates;
+        setSearch(feature.properties.STOP_NAME || feature.properties.STOP_ID || "");
         setShowSuggestions(false);
-        map.current.flyTo({ center: feature.center, zoom: 14, essential: true });
+        map.current.flyTo({ center: coords, zoom: 15, essential: true });
     };
 
     return (
@@ -247,6 +251,127 @@ const Map = () => {
                 }}
                 ref={mapContainer}
             />
+
+            {/* Custom Modal Popup for Stop */}
+            {selectedStop && (
+                <div
+                    style={{
+                        position: "fixed",
+                        top: 0,
+                        left: 0,
+                        width: "100vw",
+                        height: "100vh",
+                        background: "rgba(0,0,0,0.45)",
+                        zIndex: 100,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                    }}
+                    onClick={() => setSelectedStop(null)}
+                >
+                    <div
+                        style={{
+                            background: "#fff",
+                            borderRadius: "18px",
+                            boxShadow: "0 8px 32px rgba(0,0,0,0.25)",
+                            padding: "48px 64px",
+                            fontSize: "32px",
+                            color: "#222",
+                            minWidth: "420px",
+                            minHeight: "220px",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            position: "relative",
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div style={{ fontWeight: 700, fontSize: "36px", marginBottom: "16px" }}>Stop Number</div>
+                        <div style={{ fontSize: "48px", color: "#DA2128", fontWeight: 800 }}>{selectedStop.stopId}</div>
+                        <div style={{ fontSize: "18px", margin: "8px 0 16px 0", color: "#222" }}>
+                            <span style={{ fontWeight: 600 }}>Lobby Count:</span> {lobbyCount} currently betting
+                        </div>
+                        <div style={{ fontSize: "22px", margin: "16px 0 8px 0", color: "#0088CE" }}>
+                            Bus Number: <span style={{ fontWeight: 700 }}>{getBusNumber(selectedStop)}</span>
+                        </div>
+                        <div style={{ margin: "16px 0 8px 0", width: "100%", textAlign: "left" }}>
+                            <label style={{ fontSize: "18px", fontWeight: 600 }}>Choose Time:</label><br />
+                            <input
+                                type="time"
+                                value={betTime}
+                                onChange={e => setBetTime(e.target.value)}
+                                style={{
+                                    fontSize: "20px",
+                                    padding: "8px 16px",
+                                    borderRadius: "8px",
+                                    border: "1.5px solid #DA2128",
+                                    marginTop: "6px",
+                                    marginBottom: "12px",
+                                    width: "180px"
+                                }}
+                            />
+                        </div>
+                        <div style={{ margin: "8px 0 16px 0", width: "100%", textAlign: "left" }}>
+                            <label style={{ fontSize: "18px", fontWeight: 600 }}>Bet Amount (SOL):</label><br />
+                            <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={betAmount}
+                                onChange={e => setBetAmount(e.target.value)}
+                                style={{
+                                    fontSize: "20px",
+                                    padding: "8px 16px",
+                                    borderRadius: "8px",
+                                    border: "1.5px solid #DA2128",
+                                    marginTop: "6px",
+                                    width: "180px"
+                                }}
+                            />
+                        </div>
+                        <button
+                            style={{
+                                marginTop: "12px",
+                                padding: "14px 36px",
+                                fontSize: "22px",
+                                borderRadius: "10px",
+                                background: placingBet ? "#aaa" : "#DA2128",
+                                color: "#fff",
+                                border: "none",
+                                cursor: placingBet ? "not-allowed" : "pointer",
+                                fontWeight: 700,
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                                transition: "background 0.2s",
+                            }}
+                            disabled={placingBet || !betAmount || !betTime}
+                            onClick={() => {
+                                setPlacingBet(true);
+                                // TODO: Solana bet logic here
+                                setTimeout(() => {
+                                    setPlacingBet(false);
+                                    setSelectedStop(null);
+                                }, 1200);
+                            }}
+                        >Place Bet (Solana)</button>
+                        <button
+                            style={{
+                                marginTop: "18px",
+                                padding: "10px 28px",
+                                fontSize: "16px",
+                                borderRadius: "8px",
+                                background: "#222",
+                                color: "#fff",
+                                border: "none",
+                                cursor: "pointer",
+                                fontWeight: 600,
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                            }}
+                            onClick={() => setSelectedStop(null)}
+                        >Close</button>
+                    </div>
+                </div>
+            )}
             <div
                 style={{
                     position: "fixed",
@@ -302,39 +427,42 @@ const Map = () => {
                             </span>
                         )}
                     </div>
-                    {showSuggestions && suggestions.length > 0 && (
-                        <ul
-                            style={{
-                                width: "100%",
-                                maxHeight: "300px",
-                                background: "#222",
-                                borderRadius: "10px",
-                                boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
-                                overflowY: "auto",
-                                zIndex: 2,
-                                margin: 0,
-                                padding: "8px 0",
-                                listStyle: "none",
-                                position: "static",
-                            }}
-                        >
-                            {suggestions.map((feature) => (
-                                <li
-                                    key={feature.id}
-                                    style={{
-                                        padding: "12px 24px",
-                                        cursor: "pointer",
-                                        color: "#fff",
-                                        fontSize: "16px",
-                                        borderBottom: "1px solid #333",
-                                    }}
-                                    onMouseDown={() => handleSuggestionClick(feature)}
-                                >
-                                    {feature.place_name}
-                                </li>
-                            ))}
-                        </ul>
-                    )}
+                        {showSuggestions && suggestions.length > 0 && (
+                            <ul
+                                style={{
+                                    width: "100%",
+                                    maxHeight: "300px",
+                                    background: "#222",
+                                    borderRadius: "10px",
+                                    boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                                    overflowY: "auto",
+                                    zIndex: 2,
+                                    margin: 0,
+                                    padding: "8px 0",
+                                    listStyle: "none",
+                                    position: "static",
+                                }}
+                            >
+                                {suggestions.map((feature) => {
+                                    const props = feature.properties || {};
+                                    return (
+                                        <li
+                                            key={feature.properties.STOP_ID || feature.properties.STOP_CODE}
+                                            style={{
+                                                padding: "12px 24px",
+                                                cursor: "pointer",
+                                                color: "#fff",
+                                                fontSize: "16px",
+                                                borderBottom: "1px solid #333",
+                                            }}
+                                            onMouseDown={() => handleSuggestionClick(feature)}
+                                        >
+                                            {props.STOP_NAME} <span style={{ color: '#aaa', fontSize: '14px', marginLeft: '8px' }}>#{props.STOP_ID}</span>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        )}
                 </div>
 
                 {/* Legend for route types */}
