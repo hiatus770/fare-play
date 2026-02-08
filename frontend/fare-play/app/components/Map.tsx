@@ -2,6 +2,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import mapboxgl from "mapbox-gl";
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { SidebarWallet } from "./sidebar-wallet";
 
 // TODO: Replace with your own Mapbox access token
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "YOUR_MAPBOX_ACCESS_TOKEN";
@@ -123,6 +124,8 @@ const Map = () => {
                     flexDirection: "column",
                     alignItems: "flex-start",
                     padding: "48px 32px 32px 32px",
+                    paddingTop: "80px",
+                    overflowY: "auto",
                     boxShadow: "2px 0 24px rgba(0,0,0,0.25)",
                 }}
             >
@@ -218,6 +221,8 @@ const Map = () => {
                         <li style={{ padding: "8px 0" }}>Stop 5 (placeholder)</li>
                     </ul>
                 </div>
+                {/* Wallet Section */}
+                <SidebarWallet />
             </div>
             {error && <div style={{ color: "#ff6b6b", marginTop: "8px" }}>{error}</div>}
         </>
