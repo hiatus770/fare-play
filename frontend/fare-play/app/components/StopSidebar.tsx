@@ -350,7 +350,8 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
   };
 
   const filteredStops = stops.filter(stop =>
-    stop.title.toLowerCase().includes(searchQuery.toLowerCase())
+    stop.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    stop.tag.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -685,7 +686,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
 
             <input
               type="text"
-              placeholder="Search stops..."
+              placeholder="Search by name or number..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
@@ -745,7 +746,10 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                       e.currentTarget.style.transform = "translateY(0)";
                     }}
                   >
-                    <div style={{ fontSize: "15px", fontWeight: "500" }}>{stop.title}</div>
+                    <div style={{ fontSize: "15px", fontWeight: "500", marginBottom: "4px" }}>{stop.title}</div>
+                    <div style={{ fontSize: "13px", color: "#6c757d" }}>
+                      Stop #{stop.tag} • Route {selectedRoute.tag} • {mapCenter ? (getDistance(mapCenter.lat, mapCenter.lon, stop.lat, stop.lon) * 1000).toFixed(0) : "—"}m away
+                    </div>
                   </li>
                 ))}
               </ul>
