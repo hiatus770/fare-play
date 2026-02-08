@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+"""
+TTC Real-Time API v2
+Focus: Real-time current status + frozen predictions history
+"""
+
+from flask import Flask, jsonify, request
+from datetime import datetime, timedelta
+import requests
+import xml.etree.ElementTree as ET
+from database import PredictionDB
+
+app = Flask(__name__)
+db = PredictionDB()
+
+NEXTBUS_BASE_URL = "http://webservices.nextbus.com/service/publicXMLFeed"
+AGENCY = "ttc"
+
+def get_current_predictions(route_tag, stop_tag):
+    """Get CURRENT predictions from TTC API"""
+    try:
+        params = {
+            'command': 'predictions',
+            'a': AGENCY,
+            'r': route_tag,
+            's': stop_tag,
+        }
+        response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=10)
+        root = ET.fromstring(response.content)
+
+        predictions = {}
+        for direction in root.findall('.//direction'):
+            for prediction in direction.findall('.//prediction'):
+                vehicle_id = prediction.get('vehicle')
+                predictions[vehicle_id] = {
+                    'vehicle_id': vehicle_id,
+                    'seconds': int(prediction.get('seconds', 0)),
+                    'minutes': int(prediction.get('minutes', 0)),
+                    'direction': direction.get('title'),
+                    'timestamp': datetime.now(),
+                }
+
+        return predictions
+    except:
+        return {}
+
+def get_route_stop_info(route_tag, stop_tag):
+    """Get route and stop name info"""
+    try:
+        params = {
+            'command': 'routeConfig',
+            'a': AGENCY,
+            'r': route_tag,
+        }
+        response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=10)
+        root = ET.fromstring(response.content)
+
+        route_name = root.find('.//route').get('title')
+
+        for stop in root.findall('.//stop'):
+            if stop.get('tag') == stop_tag:
+                return {
+                    'route_tag': route_tag,
+                    'route_name': route_name,
+                    'stop_tag': stop_tag,
+                    'stop_name': stop.get('title'),
+                }
+        return None
+    except:
+        return None
+
+@app.route('/stop/<route>/<stop>', methods=['GET'])
+def get_stop_status(route, stop):
+    """
+    Get CURRENT status for a stop
+    Shows: next vehicles + their current predictions
+    """
+    # Get current predictions
+    current_preds = get_current_predictions(route, stop)
+
+    if not current_preds:
+        return jsonify({
+            'error': 'No predictions available for this route/stop',
+            'route': route,
+            'stop': stop
+        }), 404
+
+    # Get route/stop info
+    info = get_route_stop_info(route, stop)
+
+    # Get frozen predictions from database for comparison
+    frozen_preds = db.get_raw_arrivals(route=route, stop=stop)
+
+    # Build response with current + frozen data
+    response = {
+        'timestamp': datetime.now().isoformat(),
+        'route': route,
+        'stop': stop,
+        'route_name': info['route_name'] if info else 'Unknown',
+        'stop_name': info['stop_name'] if info else 'Unknown',
+
+        'current_predictions': [],
+        'frozen_predictions_history': []
+    }
+
+    # Current predictions (next vehicles)
+    for vehicle_id in sorted(current_preds.keys()):
+        pred = current_preds[vehicle_id]
+        response['current_predictions'].append({
+            'vehicle_id': vehicle_id,
+            'current_eta_seconds': pred['seconds'],
+            'current_eta_display': f"{pred['minutes']}m {pred['seconds']%60}s",
+            'direction': pred['direction'],
+            'recorded_at': pred['timestamp'].isoformat(),
+        })
+
+    # Frozen predictions history (past predictions for comparison)
+    recent_frozen = [f for f in frozen_preds if
+                     (datetime.now() - datetime.fromisoformat(f['created_at'].replace(' ', 'T'))).total_seconds() < 3600]
+
+    for frozen in recent_frozen[:10]:  # Last 10
+        response['frozen_predictions_history'].append({
+            'vehicle_id': frozen['vehicle_id'],
+            'frozen_at': frozen['created_at'],
+            'frozen_prediction_seconds': frozen['frozen_prediction_seconds'],
+            'frozen_prediction_display': f"{frozen['frozen_prediction_seconds']//60}m {frozen['frozen_prediction_seconds']%60}s",
+            'time_elapsed_since': datetime.now().isoformat(),
+            'actual_elapsed_seconds': frozen['time_elapsed_seconds'],
+            'actual_elapsed_display': f"{int(frozen['time_elapsed_seconds']//60)}m {int(frozen['time_elapsed_seconds']%60)}s",
+            'error_seconds': frozen['actual_error_seconds'],
+            'error_display': f"{frozen['actual_error_seconds']:+.0f}s",
+            'status': frozen['status'],
+        })
+
+    return jsonify(response)
+
+@app.route('/route/<route>/stops', methods=['GET'])
+def list_route_stops(route):
+    """List all stops on a route with their current status"""
+    try:
+        params = {
+            'command': 'routeConfig',
+            'a': AGENCY,
+            'r': route,
+        }
+        response = requests.get(NEXTBUS_BASE_URL, params=params, timeout=10)
+        root = ET.fromstring(response.content)
+
+        route_info = root.find('.//route')
+
+        stops = []
+        for stop in root.findall('.//stop'):
+            if stop.get('lat') and stop.get('lon'):
+                stops.append({
+                    'tag': stop.get('tag'),
+                    'title': stop.get('title'),
+                    'link': f"/stop/{route}/{stop.get('tag')}",
+                })
+
+        return jsonify({
+            'route': route,
+            'route_name': route_info.get('title'),
+            'total_stops': len(stops),
+            'stops': stops[:20]  # First 20
+        })
+    except:
+        return jsonify({'error': 'Could not fetch route'}), 404
+
+@app.route('/compare/<route>/<stop>/<vehicle>', methods=['GET'])
+def compare_predictions(route, stop, vehicle):
+    """
+    Compare frozen prediction vs current prediction for a vehicle
+    Shows: what was predicted X min ago vs what's predicted now
+    """
+    # Get current prediction
+    current_preds = get_current_predictions(route, stop)
+    current = current_preds.get(vehicle)
+
+    # Get frozen predictions from history
+    frozen_list = db.get_raw_arrivals(route=route, stop=stop)
+    frozen = next((f for f in frozen_list if f['vehicle_id'] == vehicle), None)
+
+    if not current and not frozen:
+        return jsonify({'error': 'Vehicle not found'}), 404
+
+    response = {
+        'timestamp': datetime.now().isoformat(),
+        'route': route,
+        'stop': stop,
+        'vehicle_id': vehicle,
+
+        'current_prediction': None,
+        'frozen_prediction': None,
+        'comparison': None,
+    }
+
+    if current:
+        response['current_prediction'] = {
+            'seconds': current['seconds'],
+            'display': f"{current['minutes']}m {current['seconds']%60}s",
+            'direction': current['direction'],
+            'recorded_at': current['timestamp'].isoformat(),
+        }
+
+    if frozen:
+        response['frozen_prediction'] = {
+            'frozen_at': frozen['created_at'],
+            'predicted_seconds': frozen['frozen_prediction_seconds'],
+            'predicted_display': f"{frozen['frozen_prediction_seconds']//60}m {frozen['frozen_prediction_seconds']%60}s",
+            'elapsed_since_frozen': (datetime.now() - datetime.fromisoformat(frozen['created_at'].replace(' ', 'T'))).total_seconds(),
+            'actual_arrival': frozen['time_elapsed_seconds'],
+            'actual_arrival_display': f"{int(frozen['time_elapsed_seconds']//60)}m {int(frozen['time_elapsed_seconds']%60)}s",
+            'error': frozen['actual_error_seconds'],
+            'error_display': f"{frozen['actual_error_seconds']:+.0f}s",
+            'status': frozen['status'],
+        }
+
+        # Show the progress
+        response['comparison'] = {
+            'originally_predicted': frozen['frozen_prediction_seconds'],
+            'actually_took': frozen['time_elapsed_seconds'],
+            'difference': frozen['actual_error_seconds'],
+            'difference_display': f"{frozen['actual_error_seconds']:+.0f}s",
+            'was_late': frozen['actual_error_seconds'] > 15,
+            'was_early': frozen['actual_error_seconds'] < -15,
+            'was_on_time': abs(frozen['actual_error_seconds']) <= 15,
+        }
+
+    return jsonify(response)
+
+@app.route('/history/<route>/<stop>', methods=['GET'])
+def get_history(route, stop):
+    """
+    Get frozen prediction history for a stop
+    Shows all frozen predictions recorded for this stop over time
+    """
+    limit = request.args.get('limit', 50, type=int)
+
+    frozen_list = db.get_raw_arrivals(route=route, stop=stop)
+
+    if not frozen_list:
+        return jsonify({
+            'error': 'No history for this stop',
+            'route': route,
+            'stop': stop
+        }), 404
+
+    response = {
+        'route': route,
+        'stop': stop,
+        'total_records': len(frozen_list),
+        'history': []
+    }
+
+    for record in frozen_list[:limit]:
+        response['history'].append({
+            'vehicle_id': record['vehicle_id'],
+            'frozen_at': record['created_at'],
+            'prediction_at_freeze': f"{record['frozen_prediction_seconds']//60}m {record['frozen_prediction_seconds']%60}s",
+            'seconds': record['frozen_prediction_seconds'],
+            'actual_elapsed': f"{int(record['time_elapsed_seconds']//60)}m {int(record['time_elapsed_seconds']%60)}s",
+            'error': f"{record['actual_error_seconds']:+.0f}s",
+            'status': record['status'],
+            'freeze_category': record['freeze_category'],
+            'hour': record['hour_of_day'],
+            'day': record['day_of_week'],
+        })
+
+    return jsonify(response)
+
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check"""
+    status = db.get_status()
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'database': status
+    })
+
+if __name__ == '__main__':
+    print("TTC Real-Time API v2")
+    print("Endpoints:")
+    print("  GET  /stop/<route>/<stop>          - Current status + frozen history")
+    print("  GET  /route/<route>/stops          - List stops on route")
+    print("  GET  /compare/<route>/<stop>/<vehicle> - Compare frozen vs current")
+    print("  GET  /history/<route>/<stop>       - Frozen predictions history")
+    print("  GET  /health                       - Health check")
+    print()
+    app.run(host='0.0.0.0', port=5000, debug=False)
