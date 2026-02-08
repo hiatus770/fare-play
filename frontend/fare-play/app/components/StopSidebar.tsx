@@ -633,7 +633,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                   border: "2px solid #e3e6ea",
                   borderRadius: "12px",
                   color: "#232323",
-                  fontSize: "1rem",
+                  fontSize: "0.9rem",
                   fontWeight: 400,
                   outline: "none",
                   boxSizing: "border-box"
@@ -662,7 +662,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                 borderRadius: "10px",
                 background: "#fff",
                 color: "#232323",
-                fontSize: "1rem",
+                fontSize: "0.9rem",
                 fontWeight: 500,
                 outline: "none"
               }}
