@@ -75,38 +75,6 @@ const TopNav = () => {
 
       {/* Right: Menu Items */}
       <div style={{ display: "flex", alignItems: "center", gap: "24px" }}>
-        {/* Map Section */}
-        <button
-          onClick={handleMapClick}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "10px 20px",
-            background: "#f5f5f5",
-            border: "1.5px solid #e0e0e0",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontSize: "15px",
-            fontWeight: "500",
-            color: "#333",
-            transition: "all 0.15s",
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.background = "#e8e8e8";
-            e.currentTarget.style.borderColor = "#0088CE";
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.background = "#f5f5f5";
-            e.currentTarget.style.borderColor = "#e0e0e0";
-          }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0088CE" strokeWidth="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
-          Map
-        </button>
 
         {/* User Info */}
         <button

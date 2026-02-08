@@ -51,7 +51,7 @@ const Map = () => {
 
         map.current = new mapboxgl.Map({
             container: mapContainer.current!,
-            style: "mapbox://styles/mapbox/dark-v10",
+            style: "mapbox://styles/mapbox/light-v10", // White/light map style
             center: [-79.3832, 43.6455],
             zoom: 13,
             maxBounds: [

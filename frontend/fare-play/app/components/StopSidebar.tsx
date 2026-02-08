@@ -58,6 +58,8 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
   const [stops, setStops] = useState<Stop[]>([]);
   const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [routeSearch, setRouteSearch] = useState("");
+  const [routeTypeFilter, setRouteTypeFilter] = useState<string>("all");
 
   const [predictions, setPredictions] = useState<Prediction[]>([]);
   const [frozenPredictions, setFrozenPredictions] = useState<FrozenPrediction[]>([]);
@@ -176,40 +178,48 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       if (!response.ok) throw new Error("Failed to fetch routes");
       const data = await response.json();
 
-      // Filter to streetcar routes and add colors
-      const streetcarRoutes = data.routes
-        .filter((r: any) => STREETCAR_ROUTES.includes(r.tag))
-        .map((r: any) => ({
-          tag: r.tag,
-          name: r.name,
-          color: getRouteColor(r.tag),
-        }));
-
-      setRoutes(streetcarRoutes);
+      // Map all routes, add type and color
+      const allRoutes = data.routes.map((r: any) => ({
+        tag: r.tag,
+        name: r.name,
+        type: r.type || inferRouteType(r), // fallback if type missing
+        color: getRouteColor(r.tag, r.type || inferRouteType(r)),
+      }));
+      setRoutes(allRoutes);
     } catch (err) {
       console.error("Failed to load routes:", err);
-      // Fallback routes
-      setRoutes([
-        { tag: "501", name: "501-Queen", color: "#FF6B6B" },
-        { tag: "504", name: "504-King", color: "#4ECDC4" },
-        { tag: "510", name: "510-Spadina", color: "#F8B22D" },
-      ]);
+      setRoutes([]);
     }
   };
 
-  const getRouteColor = (tag: string): string => {
+  // Helper to infer route type from tag/name if not provided
+  function inferRouteType(route: any) {
+    if (route.name && route.name.toLowerCase().includes("subway")) return "subway";
+    if (route.name && route.name.toLowerCase().includes("bus")) return "bus";
+    if (route.name && route.name.toLowerCase().includes("streetcar")) return "streetcar";
+    if (route.tag && /^[0-9]{3}$/.test(route.tag)) return "bus";
+    if (route.tag && /^[0-9]{2,3}$/.test(route.tag)) return "streetcar";
+    return "bus";
+  }
+
+  // Update getRouteColor to support all types
+  function getRouteColor(tag: string, type?: string): string {
+    // TTC legend color scheme
+    if (type === "subway") return "#DA2128";      // Red
+    if (type === "streetcar") return "#F8B22D";   // Yellow/Orange
+    if (type === "bus") return "#0088CE";         // Blue
+    // fallback by tag
     const colors: Record<string, string> = {
-      "501": "#FF6B6B",
-      "503": "#9B59B6",
-      "504": "#4ECDC4",
-      "505": "#3498DB",
-      "506": "#E74C3C",
-      "509": "#2ECC71",
+      "501": "#F8B22D",
+      "504": "#F8B22D",
+      "505": "#F8B22D",
+      "506": "#F8B22D",
+      "509": "#F8B22D",
       "510": "#F8B22D",
-      "511": "#1ABC9C",
-      "512": "#E67E22",
+      "511": "#F8B22D",
+      "512": "#F8B22D",
     };
-    return colors[tag] || "#4ECDC4";
+    return colors[tag] || "#0088CE";
   };
 
   const loadStops = async (routeTag: string) => {
@@ -336,23 +346,36 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
   };
 
   const handleBack = () => {
-    if (selectedStop) {
-      setSelectedStop(null);
-      setPredictions([]);
-      setFrozenPredictions([]);
-      setSelectedVehicle(null);
-      onStopSelect?.(null, selectedRoute?.tag || null);
-    } else if (selectedRoute) {
-      setSelectedRoute(null);
-      setStops([]);
-      onStopSelect?.(null, null);
-    }
+    // Always go back to the main sidebar (route list)
+    setSelectedStop(null);
+    setSelectedRoute(null);
+    setStops([]);
+    setPredictions([]);
+    setFrozenPredictions([]);
+    setSelectedVehicle(null);
+    onStopSelect?.(null, null);
   };
 
   const filteredStops = stops.filter(stop =>
     stop.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     stop.tag.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const routeTypeOptions = [
+    { label: "All", value: "all" },
+    { label: "Subway", value: "subway" },
+    { label: "Streetcar", value: "streetcar" },
+    { label: "Bus", value: "bus" },
+  ];
+
+  const filteredRoutes = routes.filter(route => {
+    const matchesType = routeTypeFilter === "all" || route.type === routeTypeFilter;
+    const searchLower = routeSearch.trim().toLowerCase();
+    const matchesSearch =
+      route.name.toLowerCase().includes(searchLower) ||
+      route.tag.toLowerCase().includes(searchLower);
+    return matchesType && matchesSearch;
+  });
 
   return (
     <div
@@ -390,7 +413,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           }}
         >
           <span style={{ fontSize: "14px" }}>←</span>
-          {selectedStop ? "Back to stops" : "Back to routes"}
+          {"Back"}
         </button>
       )}
 
@@ -589,64 +612,128 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           padding: "20px",
           border: "2px solid #e9ecef",
         }}>
-          <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "16px", color: "#1a1a1a" }}>Streetcar Routes</div>
+          <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "16px", color: "#1a1a1a" }}>Routes</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+            <div style={{ position: "relative", flex: 1 }}>
+              <input
+                type="text"
+                placeholder="Name or number..."
+                value={routeSearch}
+                onChange={e => setRouteSearch(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "0 44px 0 18px",
+                  height: "48px",
+                  lineHeight: "48px",
+                  background: "#fff",
+                  border: "2px solid #e3e6ea",
+                  borderRadius: "12px",
+                  color: "#232323",
+                  fontSize: "1rem",
+                  fontWeight: 400,
+                  outline: "none",
+                  boxSizing: "border-box"
+                }}
+              />
+              <span style={{
+                position: "absolute",
+                right: "16px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "#b0b4b9",
+                fontSize: "1.1rem",
+                pointerEvents: "none"
+              }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+              </span>
+            </div>
+            <select
+              value={routeTypeFilter}
+              onChange={e => setRouteTypeFilter(e.target.value)}
+              style={{
+                padding: "0 10px",
+                height: "48px",
+                lineHeight: "48px",
+                border: "2px solid #e3e6ea",
+                borderRadius: "10px",
+                background: "#fff",
+                color: "#232323",
+                fontSize: "1rem",
+                fontWeight: 500,
+                outline: "none"
+              }}
+            >
+              {routeTypeOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
           {routes.length === 0 ? (
             <div style={{ color: "#6c757d", fontSize: "14px", padding: "12px 0" }}>
               Loading routes...
             </div>
           ) : (
-            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-              {routes.map((route, idx) => (
-                <li
-                  key={route.tag}
-                  onClick={() => handleRouteSelect(route)}
-                  style={{
-                    padding: "14px",
-                    marginBottom: idx < routes.length - 1 ? "8px" : "0",
-                    background: "#ffffff",
-                    border: "1.5px solid #e9ecef",
-                    borderRadius: "10px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "12px",
-                    transition: "all 0.15s",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = route.color;
-                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
-                    e.currentTarget.style.transform = "translateY(-1px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = "#e9ecef";
-                    e.currentTarget.style.boxShadow = "none";
-                    e.currentTarget.style.transform = "translateY(0)";
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      backgroundColor: route.color,
-                      borderRadius: "8px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontWeight: "700",
-                      fontSize: "12px",
-                      flexShrink: 0,
-                      color: "#fff",
-                    }}
-                  >
-                    {route.tag}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "15px", fontWeight: "500", color: "#1a1a1a" }}>{route.name}</div>
-                    <div style={{ fontSize: "13px", color: "#6c757d" }}>Streetcar</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+              {filteredRoutes.length === 0 ? (
+                <div style={{ color: "#6c757d", fontSize: "14px", padding: "12px 0" }}>
+                  No routes found.
+                </div>
+              ) : (
+                <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                  {filteredRoutes.map((route, idx) => (
+                    <li
+                      key={route.tag}
+                      onClick={() => handleRouteSelect(route)}
+                      style={{
+                        padding: "14px",
+                        marginBottom: idx < filteredRoutes.length - 1 ? "8px" : "0",
+                        background: "#ffffff",
+                        border: selectedRoute && selectedRoute.tag === route.tag ? `2px solid ${route.color}` : "1.5px solid #e9ecef",
+                        borderRadius: "10px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        transition: "all 0.15s",
+                        boxShadow: selectedRoute && selectedRoute.tag === route.tag ? "0 2px 8px rgba(0,0,0,0.08)" : undefined,
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = route.color;
+                        e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+                        e.currentTarget.style.transform = "translateY(-1px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = "#e9ecef";
+                        e.currentTarget.style.boxShadow = "none";
+                        e.currentTarget.style.transform = "translateY(0)";
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "36px",
+                          height: "36px",
+                          backgroundColor: route.color,
+                          borderRadius: "8px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: "700",
+                          fontSize: "12px",
+                          flexShrink: 0,
+                          color: "#fff",
+                        }}
+                      >
+                        {route.tag}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: "15px", fontWeight: "500", color: "#1a1a1a" }}>{route.name}</div>
+                        <div style={{ fontSize: "13px", color: "#6c757d" }}>{route.type ? route.type.charAt(0).toUpperCase() + route.type.slice(1) : "Route"}</div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -684,23 +771,41 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
               </div>
             </div>
 
-            <input
-              type="text"
-              placeholder="Search by name or number..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                background: "#ffffff",
-                border: "1.5px solid #dee2e6",
-                borderRadius: "8px",
-                color: "#1a1a1a",
-                fontSize: "14px",
-                boxSizing: "border-box",
-                outline: "none",
-              }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type="text"
+                placeholder="Name or number..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "12px 44px 12px 14px",
+                  background: "#ffffff",
+                  border: "1.5px solid #dee2e6",
+                  borderRadius: "8px",
+                  color: "#1a1a1a",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                  outline: "none",
+                }}
+              />
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                style={{
+                  position: "absolute",
+                  right: "14px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  pointerEvents: "none",
+                }}
+              >
+                <circle cx="11" cy="11" r="7" stroke="#9ca3af" strokeWidth="2" />
+                <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
           </div>
 
           <div style={{
