@@ -356,36 +356,19 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
     <div
       style={{
         position: "fixed",
-        top: 0,
+        top: "70px",
         left: 0,
         width: "500px",
-        height: "100vh",
-        background: "rgba(40, 40, 40, 0.92)",
+        height: "calc(100vh - 70px)",
+        background: "#ffffff",
         overflowY: "auto",
         zIndex: 10,
-        padding: "48px 32px 32px 32px",
+        padding: "32px",
         boxSizing: "border-box",
-        boxShadow: "2px 0 24px rgba(0,0,0,0.25)",
+        boxShadow: "4px 0 16px rgba(0,0,0,0.08)",
+        borderRight: "2px solid #e0e0e0",
       }}
     >
-      {/* Header */}
-      <div style={{ marginBottom: "16px" }}>
-        <h1
-          style={{
-            color: "#fff",
-            fontSize: "32px",
-            fontWeight: "700",
-            margin: "0 0 8px 0",
-            letterSpacing: "-0.5px",
-          }}
-        >
-          FarePlay
-        </h1>
-        <p style={{ color: "#aaa", fontSize: "15px", margin: "0" }}>
-          Predict TTC arrivals
-        </p>
-      </div>
-
       {/* Back Button */}
       {(selectedRoute || selectedStop) && (
         <button
@@ -394,13 +377,14 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
             padding: "8px 0",
             background: "none",
             border: "none",
-            color: "#4ECDC4",
+            color: "#0088CE",
             cursor: "pointer",
             fontSize: "14px",
-            marginBottom: "8px",
+            marginBottom: "16px",
             display: "flex",
             alignItems: "center",
             gap: "6px",
+            fontWeight: "500",
           }}
         >
           <span style={{ fontSize: "14px" }}>←</span>
@@ -412,36 +396,42 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       {!selectedRoute && nearbyStops.length > 0 && (
         <div style={{
           width: "100%",
-          marginTop: "24px",
-          background: "#232323",
-          borderRadius: "8px",
-          padding: "16px",
-          color: "#fff",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          marginBottom: "24px",
+          background: "#f8f9fa",
+          borderRadius: "12px",
+          padding: "20px",
+          border: "2px solid #e9ecef",
         }}>
-          <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Nearby Stops</div>
+          <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "16px", color: "#1a1a1a" }}>Nearby Stops</div>
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {nearbyStops.map((stop, idx) => (
               <li
                 key={`${stop.routeTag}-${stop.tag}`}
                 onClick={() => handleNearbyStopSelect(stop)}
                 style={{
-                  padding: "12px 0",
-                  borderBottom: idx < nearbyStops.length - 1 ? "1px solid #333" : "none",
+                  padding: "14px",
+                  marginBottom: idx < nearbyStops.length - 1 ? "8px" : "0",
+                  background: "#ffffff",
+                  border: "1.5px solid #e9ecef",
+                  borderRadius: "10px",
                   cursor: "pointer",
-                  transition: "color 0.15s",
+                  transition: "all 0.15s",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.color = getRouteColor(stop.routeTag);
+                  e.currentTarget.style.borderColor = getRouteColor(stop.routeTag);
+                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+                  e.currentTarget.style.transform = "translateY(-1px)";
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.color = "#fff";
+                  e.currentTarget.style.borderColor = "#e9ecef";
+                  e.currentTarget.style.boxShadow = "none";
+                  e.currentTarget.style.transform = "translateY(0)";
                 }}
               >
-                <div style={{ fontSize: "15px", fontWeight: "500", marginBottom: "4px" }}>
+                <div style={{ fontSize: "15px", fontWeight: "500", marginBottom: "4px", color: "#1a1a1a" }}>
                   {stop.title}
                 </div>
-                <div style={{ fontSize: "13px", color: "#888" }}>
+                <div style={{ fontSize: "13px", color: "#6c757d" }}>
                   Route {stop.routeTag} • {(stop.distance * 1000).toFixed(0)}m away
                 </div>
               </li>
@@ -453,12 +443,13 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       {loadingNearby && !selectedRoute && nearbyStops.length === 0 && (
         <div style={{
           width: "100%",
-          marginTop: "24px",
-          background: "#232323",
-          borderRadius: "8px",
-          padding: "16px",
-          color: "#888",
+          marginBottom: "24px",
+          background: "#f8f9fa",
+          borderRadius: "12px",
+          padding: "20px",
+          color: "#6c757d",
           textAlign: "center",
+          border: "2px solid #e9ecef",
         }}>
           Loading nearby stops...
         </div>
@@ -468,16 +459,15 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       {!selectedRoute && (
         <div style={{
           width: "100%",
-          marginTop: "24px",
-          background: "#232323",
-          borderRadius: "8px",
-          padding: "16px",
-          color: "#fff",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          marginBottom: "24px",
+          background: "#f8f9fa",
+          borderRadius: "12px",
+          padding: "20px",
+          border: "2px solid #e9ecef",
         }}>
-          <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Streetcar Routes</div>
+          <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "16px", color: "#1a1a1a" }}>Streetcar Routes</div>
           {routes.length === 0 ? (
-            <div style={{ color: "#888", fontSize: "14px", padding: "12px 0" }}>
+            <div style={{ color: "#6c757d", fontSize: "14px", padding: "12px 0" }}>
               Loading routes...
             </div>
           ) : (
@@ -487,40 +477,48 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                   key={route.tag}
                   onClick={() => handleRouteSelect(route)}
                   style={{
-                    padding: "12px 0",
-                    borderBottom: idx < routes.length - 1 ? "1px solid #333" : "none",
+                    padding: "14px",
+                    marginBottom: idx < routes.length - 1 ? "8px" : "0",
+                    background: "#ffffff",
+                    border: "1.5px solid #e9ecef",
+                    borderRadius: "10px",
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     gap: "12px",
-                    transition: "opacity 0.15s",
+                    transition: "all 0.15s",
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.opacity = "0.7";
+                    e.currentTarget.style.borderColor = route.color;
+                    e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+                    e.currentTarget.style.transform = "translateY(-1px)";
                   }}
                   onMouseLeave={(e) => {
-                    e.currentTarget.style.opacity = "1";
+                    e.currentTarget.style.borderColor = "#e9ecef";
+                    e.currentTarget.style.boxShadow = "none";
+                    e.currentTarget.style.transform = "translateY(0)";
                   }}
                 >
                   <div
                     style={{
-                      width: "32px",
-                      height: "32px",
+                      width: "36px",
+                      height: "36px",
                       backgroundColor: route.color,
-                      borderRadius: "6px",
+                      borderRadius: "8px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       fontWeight: "700",
-                      fontSize: "11px",
+                      fontSize: "12px",
                       flexShrink: 0,
+                      color: "#fff",
                     }}
                   >
                     {route.tag}
                   </div>
                   <div>
-                    <div style={{ fontSize: "15px", fontWeight: "500" }}>{route.name}</div>
-                    <div style={{ fontSize: "13px", color: "#888" }}>Streetcar</div>
+                    <div style={{ fontSize: "15px", fontWeight: "500", color: "#1a1a1a" }}>{route.name}</div>
+                    <div style={{ fontSize: "13px", color: "#6c757d" }}>Streetcar</div>
                   </div>
                 </li>
               ))}
@@ -533,31 +531,32 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       {selectedRoute && !selectedStop && (
         <div>
           <div style={{
-            background: "#232323",
-            borderRadius: "8px",
-            padding: "16px",
-            marginTop: "24px",
+            background: "#f8f9fa",
+            borderRadius: "12px",
+            padding: "20px",
             marginBottom: "16px",
+            border: "2px solid #e9ecef",
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
               <div
                 style={{
-                  width: "32px",
-                  height: "32px",
+                  width: "36px",
+                  height: "36px",
                   backgroundColor: selectedRoute.color,
-                  borderRadius: "6px",
+                  borderRadius: "8px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontWeight: "700",
-                  fontSize: "11px",
+                  fontSize: "12px",
+                  color: "#fff",
                 }}
               >
                 {selectedRoute.tag}
               </div>
               <div>
-                <div style={{ color: "#fff", fontWeight: "600", fontSize: "16px" }}>{selectedRoute.name}</div>
-                <div style={{ color: "#888", fontSize: "13px" }}>{stops.length} stops</div>
+                <div style={{ color: "#1a1a1a", fontWeight: "600", fontSize: "16px" }}>{selectedRoute.name}</div>
+                <div style={{ color: "#6c757d", fontSize: "13px" }}>{stops.length} stops</div>
               </div>
             </div>
 
@@ -569,10 +568,10 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
               style={{
                 width: "100%",
                 padding: "12px 14px",
-                background: "#2a2a2a",
-                border: "1.5px solid #444",
+                background: "#ffffff",
+                border: "1.5px solid #dee2e6",
                 borderRadius: "8px",
-                color: "#fff",
+                color: "#1a1a1a",
                 fontSize: "14px",
                 boxSizing: "border-box",
                 outline: "none",
@@ -581,18 +580,19 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           </div>
 
           <div style={{
-            background: "#232323",
-            borderRadius: "8px",
-            padding: "16px",
+            background: "#f8f9fa",
+            borderRadius: "12px",
+            padding: "20px",
             maxHeight: "calc(100vh - 380px)",
             overflowY: "auto",
+            border: "2px solid #e9ecef",
           }}>
             {loadingStops ? (
-              <div style={{ color: "#888", fontSize: "14px", padding: "12px 0", textAlign: "center" }}>
+              <div style={{ color: "#6c757d", fontSize: "14px", padding: "12px 0", textAlign: "center" }}>
                 Loading stops...
               </div>
             ) : filteredStops.length === 0 ? (
-              <div style={{ color: "#888", fontSize: "14px", padding: "12px 0", textAlign: "center" }}>
+              <div style={{ color: "#6c757d", fontSize: "14px", padding: "12px 0", textAlign: "center" }}>
                 No stops found
               </div>
             ) : (
@@ -602,16 +602,24 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                     key={stop.tag}
                     onClick={() => handleStopSelect(stop)}
                     style={{
-                      padding: "12px 0",
-                      borderBottom: idx < filteredStops.length - 1 ? "1px solid #333" : "none",
+                      padding: "14px",
+                      marginBottom: idx < filteredStops.length - 1 ? "8px" : "0",
+                      background: "#ffffff",
+                      border: "1.5px solid #e9ecef",
+                      borderRadius: "10px",
                       cursor: "pointer",
-                      transition: "color 0.15s",
+                      transition: "all 0.15s",
+                      color: "#1a1a1a",
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.color = selectedRoute.color;
+                      e.currentTarget.style.borderColor = selectedRoute.color;
+                      e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+                      e.currentTarget.style.transform = "translateY(-1px)";
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.color = "#fff";
+                      e.currentTarget.style.borderColor = "#e9ecef";
+                      e.currentTarget.style.boxShadow = "none";
+                      e.currentTarget.style.transform = "translateY(0)";
                     }}
                   >
                     <div style={{ fontSize: "15px", fontWeight: "500" }}>{stop.title}</div>
@@ -629,34 +637,35 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           {/* Selected Stop Info */}
           <div
             style={{
-              background: "#232323",
-              borderRadius: "8px",
-              padding: "16px",
-              marginTop: "24px",
+              background: "#f8f9fa",
+              borderRadius: "12px",
+              padding: "20px",
               marginBottom: "16px",
+              border: "2px solid #e9ecef",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <div
                 style={{
-                  width: "32px",
-                  height: "32px",
+                  width: "36px",
+                  height: "36px",
                   backgroundColor: selectedRoute.color,
-                  borderRadius: "6px",
+                  borderRadius: "8px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontWeight: "700",
-                  fontSize: "11px",
+                  fontSize: "12px",
+                  color: "#fff",
                 }}
               >
                 {selectedRoute.tag}
               </div>
               <div>
-                <div style={{ color: "#fff", fontSize: "16px", fontWeight: "600" }}>
+                <div style={{ color: "#1a1a1a", fontSize: "16px", fontWeight: "600" }}>
                   {stopName || selectedStop.title}
                 </div>
-                <div style={{ color: "#888", fontSize: "13px" }}>
+                <div style={{ color: "#6c757d", fontSize: "13px" }}>
                   {routeName || selectedRoute.name}
                 </div>
               </div>
@@ -665,12 +674,13 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
 
           {loading && (
             <div style={{
-              background: "#232323",
-              borderRadius: "8px",
-              padding: "16px",
+              background: "#f8f9fa",
+              borderRadius: "12px",
+              padding: "20px",
               marginBottom: "16px",
+              border: "2px solid #e9ecef",
             }}>
-              <div style={{ color: "#888", textAlign: "center", fontSize: "14px" }}>
+              <div style={{ color: "#6c757d", textAlign: "center", fontSize: "14px" }}>
                 Loading predictions...
               </div>
             </div>
@@ -679,12 +689,13 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           {error && (
             <div
               style={{
-                background: "#232323",
-                color: "#FF6B6B",
-                padding: "12px 16px",
-                borderRadius: "8px",
+                background: "#fff5f5",
+                color: "#DA2128",
+                padding: "16px",
+                borderRadius: "12px",
                 marginBottom: "16px",
                 fontSize: "14px",
+                border: "2px solid #ffdddd",
               }}
             >
               {error}
@@ -694,13 +705,14 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           {success && (
             <div
               style={{
-                background: "#232323",
-                color: "#4ECDC4",
-                padding: "12px 16px",
-                borderRadius: "8px",
+                background: "#f0f9ff",
+                color: "#0088CE",
+                padding: "16px",
+                borderRadius: "12px",
                 marginBottom: "16px",
                 fontSize: "14px",
                 fontWeight: "500",
+                border: "2px solid #cfe8ff",
               }}
             >
               {success}
@@ -710,48 +722,51 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           {/* Current Vehicles */}
           {!loading && predictions.length > 0 && (
             <div style={{
-              background: "#232323",
-              borderRadius: "8px",
-              padding: "16px",
+              background: "#f8f9fa",
+              borderRadius: "12px",
+              padding: "20px",
               marginBottom: "16px",
+              border: "2px solid #e9ecef",
             }}>
-              <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Arriving Vehicles</div>
+              <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "16px", color: "#1a1a1a" }}>Arriving Vehicles</div>
               <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
                 {predictions.map((pred, idx) => (
                   <li
                     key={pred.vehicle_id}
                     onClick={() => handleVehicleSelect(pred.vehicle_id)}
                     style={{
-                      padding: "12px 0",
-                      borderBottom: idx < predictions.length - 1 ? "1px solid #333" : "none",
+                      padding: "14px",
+                      marginBottom: idx < predictions.length - 1 ? "8px" : "0",
+                      background: selectedVehicle === pred.vehicle_id ? "#ffffff" : "#ffffff",
+                      border: selectedVehicle === pred.vehicle_id ? `2px solid ${selectedRoute?.color}` : "1.5px solid #e9ecef",
+                      borderRadius: "10px",
                       cursor: "pointer",
-                      backgroundColor: selectedVehicle === pred.vehicle_id ? "rgba(78, 205, 196, 0.1)" : "transparent",
-                      transition: "background-color 0.15s",
-                      marginLeft: "-16px",
-                      marginRight: "-16px",
-                      paddingLeft: "16px",
-                      paddingRight: "16px",
+                      transition: "all 0.15s",
                     }}
                     onMouseEnter={(e) => {
                       if (selectedVehicle !== pred.vehicle_id) {
-                        e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.05)";
+                        e.currentTarget.style.borderColor = "#ced4da";
+                        e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
+                        e.currentTarget.style.transform = "translateY(-1px)";
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (selectedVehicle !== pred.vehicle_id) {
-                        e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.borderColor = "#e9ecef";
+                        e.currentTarget.style.boxShadow = "none";
+                        e.currentTarget.style.transform = "translateY(0)";
                       }
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
-                        <div style={{ fontSize: "15px", fontWeight: "500" }}>Vehicle {pred.vehicle_id}</div>
-                        <div style={{ fontSize: "13px", color: "#888", marginTop: "2px" }}>
+                        <div style={{ fontSize: "15px", fontWeight: "500", color: "#1a1a1a" }}>Vehicle {pred.vehicle_id}</div>
+                        <div style={{ fontSize: "13px", color: "#6c757d", marginTop: "2px" }}>
                           {pred.direction}
                         </div>
                       </div>
                       <div style={{
-                        color: selectedRoute?.color || "#4ECDC4",
+                        color: selectedRoute?.color || "#0088CE",
                         fontWeight: "700",
                         fontSize: "18px",
                       }}>
@@ -766,12 +781,13 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
 
           {!loading && predictions.length === 0 && !error && (
             <div style={{
-              background: "#232323",
-              borderRadius: "8px",
-              padding: "16px",
+              background: "#f8f9fa",
+              borderRadius: "12px",
+              padding: "20px",
               marginBottom: "16px",
+              border: "2px solid #e9ecef",
             }}>
-              <div style={{ color: "#888", textAlign: "center", fontSize: "14px" }}>
+              <div style={{ color: "#6c757d", textAlign: "center", fontSize: "14px" }}>
                 No vehicles currently approaching
               </div>
             </div>
@@ -780,14 +796,15 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           {/* Frozen Predictions History & Betting */}
           {selectedVehicle && (
             <div style={{
-              background: "#232323",
-              borderRadius: "8px",
-              padding: "16px",
+              background: "#f8f9fa",
+              borderRadius: "12px",
+              padding: "20px",
               marginBottom: "16px",
+              border: "2px solid #e9ecef",
             }}>
               {frozenPredictions.filter((fp) => fp.vehicle_id === selectedVehicle).length > 0 && (
                 <>
-                  <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Prediction History</div>
+                  <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "16px", color: "#1a1a1a" }}>Prediction History</div>
 
                   {frozenPredictions
                     .filter((fp) => fp.vehicle_id === selectedVehicle)
@@ -796,22 +813,25 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                   <div
                     key={idx}
                     style={{
-                      padding: "12px 0",
-                      borderBottom: idx < 2 && frozenPredictions.filter(f => f.vehicle_id === selectedVehicle).length > idx + 1 ? "1px solid #333" : "none",
+                      padding: "16px",
+                      marginBottom: idx < 2 && frozenPredictions.filter(f => f.vehicle_id === selectedVehicle).length > idx + 1 ? "12px" : "0",
+                      background: "#ffffff",
+                      borderRadius: "10px",
+                      border: "1.5px solid #e9ecef",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
                       <div>
-                        <div style={{ color: "#888", fontSize: "12px" }}>Predicted</div>
-                        <div style={{ color: "#fff", fontSize: "16px", fontWeight: "600" }}>
+                        <div style={{ color: "#6c757d", fontSize: "12px", marginBottom: "4px" }}>Predicted</div>
+                        <div style={{ color: "#1a1a1a", fontSize: "16px", fontWeight: "600" }}>
                           {fp.frozen_prediction_display}
                         </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ color: "#888", fontSize: "12px" }}>Actual</div>
+                        <div style={{ color: "#6c757d", fontSize: "12px", marginBottom: "4px" }}>Actual</div>
                         <div
                           style={{
-                            color: fp.status === "EARLY" ? "#4ECDC4" : "#FF6B6B",
+                            color: fp.status === "EARLY" ? "#0088CE" : "#DA2128",
                             fontSize: "16px",
                             fontWeight: "600",
                           }}
@@ -822,7 +842,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                     </div>
                     <div
                       style={{
-                        color: fp.status === "EARLY" ? "#4ECDC4" : "#FF6B6B",
+                        color: fp.status === "EARLY" ? "#0088CE" : "#DA2128",
                         fontSize: "13px",
                         fontWeight: "500",
                       }}
@@ -842,7 +862,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
               <div style={{ marginTop: frozenPredictions.filter((fp) => fp.vehicle_id === selectedVehicle).length > 0 ? "16px" : "0" }}>
                 <label
                   style={{
-                    color: "#888",
+                    color: "#6c757d",
                     fontSize: "13px",
                     fontWeight: "500",
                     display: "block",
@@ -859,10 +879,10 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                   style={{
                     width: "100%",
                     padding: "12px 14px",
-                    background: "#2a2a2a",
-                    border: "1.5px solid #444",
-                    borderRadius: "8px",
-                    color: "#fff",
+                    background: "#ffffff",
+                    border: "1.5px solid #dee2e6",
+                    borderRadius: "10px",
+                    color: "#1a1a1a",
                     fontSize: "15px",
                     boxSizing: "border-box",
                     outline: "none",
@@ -875,14 +895,15 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           {/* Bet Amount */}
           {selectedVehicle && selectedTime && (
             <div style={{
-              background: "#232323",
-              borderRadius: "8px",
-              padding: "16px",
+              background: "#f8f9fa",
+              borderRadius: "12px",
+              padding: "20px",
               marginBottom: "16px",
+              border: "2px solid #e9ecef",
             }}>
               <label
                 style={{
-                  color: "#888",
+                  color: "#6c757d",
                   fontSize: "13px",
                   fontWeight: "500",
                   display: "block",
@@ -900,10 +921,10 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                 style={{
                   width: "100%",
                   padding: "12px 14px",
-                  background: "#2a2a2a",
-                  border: "1.5px solid #444",
-                  borderRadius: "8px",
-                  color: "#fff",
+                  background: "#ffffff",
+                  border: "1.5px solid #dee2e6",
+                  borderRadius: "10px",
+                  color: "#1a1a1a",
                   fontSize: "15px",
                   boxSizing: "border-box",
                   marginBottom: "12px",
@@ -916,15 +937,27 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                 disabled={loading}
                 style={{
                   width: "100%",
-                  padding: "14px",
-                  background: selectedRoute?.color || "#4ECDC4",
-                  color: "#000",
+                  padding: "16px",
+                  background: `linear-gradient(135deg, ${selectedRoute?.color || "#DA2128"} 0%, ${selectedRoute?.color || "#DA2128"} 100%)`,
+                  color: "#ffffff",
                   border: "none",
-                  borderRadius: "8px",
+                  borderRadius: "10px",
                   fontSize: "15px",
                   fontWeight: "700",
                   cursor: loading ? "not-allowed" : "pointer",
                   opacity: loading ? 0.6 : 1,
+                  boxShadow: "0 2px 8px rgba(218, 33, 40, 0.25)",
+                  transition: "all 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) {
+                    e.currentTarget.style.transform = "translateY(-1px)";
+                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(218, 33, 40, 0.35)";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(218, 33, 40, 0.25)";
                 }}
               >
                 {loading ? "Placing bet..." : "Place Bet"}

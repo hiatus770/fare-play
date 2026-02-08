@@ -218,10 +218,10 @@ const Map = () => {
             <div
                 style={{
                     position: "fixed",
-                    top: 0,
+                    top: "70px",
                     left: 0,
                     width: "100vw",
-                    height: "100vh",
+                    height: "calc(100vh - 70px)",
                     zIndex: 0,
                 }}
                 ref={mapContainer}
@@ -239,15 +239,16 @@ const Map = () => {
                 position: "fixed",
                 bottom: "24px",
                 right: "24px",
-                background: "rgba(20, 20, 20, 0.95)",
+                background: "#ffffff",
                 borderRadius: "12px",
                 padding: "16px 20px",
-                color: "#fff",
-                boxShadow: "0 4px 20px rgba(0,0,0,0.4)",
+                color: "#1a1a1a",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+                border: "2px solid #e9ecef",
                 zIndex: 5,
                 fontSize: "13px",
             }}>
-                <div style={{ fontWeight: 600, marginBottom: "12px", color: "#888" }}>Map Legend</div>
+                <div style={{ fontWeight: 600, marginBottom: "12px", color: "#1a1a1a" }}>Map Legend</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                         <div style={{ width: "24px", height: "4px", background: "#DA2128", borderRadius: "2px" }}></div>
@@ -267,7 +268,7 @@ const Map = () => {
                     </div>
                 </div>
                 {!mapLoaded && (
-                    <div style={{ marginTop: "10px", fontSize: "11px", color: "#666" }}>
+                    <div style={{ marginTop: "10px", fontSize: "11px", color: "#6c757d" }}>
                         Loading map...
                     </div>
                 )}
