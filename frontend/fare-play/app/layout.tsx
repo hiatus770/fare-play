@@ -1,4 +1,6 @@
 import { SolanaProviders } from './components/providers';
+import { AuthProvider } from '@/contexts/AuthContext';
+import Header from './components/header';
 import './globals.css';
 
 export default function RootLayout({
@@ -9,9 +11,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <SolanaProviders>
-          {children}
-        </SolanaProviders>
+        <AuthProvider>
+          <SolanaProviders>
+            <Header />
+            {children}
+          </SolanaProviders>
+        </AuthProvider>
       </body>
     </html>
   );

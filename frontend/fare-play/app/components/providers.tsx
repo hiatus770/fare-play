@@ -10,6 +10,7 @@ import {
 } from '@solana/wallet-adapter-wallets';
 import { clusterApiUrl } from '@solana/web3.js';
 import { useMemo } from 'react';
+import { SolanaClientProvider } from '@solana/react-hooks';
 
 // Import wallet adapter CSS
 import '@solana/wallet-adapter-react-ui/styles.css';
@@ -17,7 +18,7 @@ import '@solana/wallet-adapter-react-ui/styles.css';
 export function SolanaProviders({ children }: { children: React.ReactNode }) {
   // Get network from environment or default to devnet
   const network = (process.env.NEXT_PUBLIC_SOLANA_NETWORK as WalletAdapterNetwork) || WalletAdapterNetwork.Devnet;
-  
+
   // Get custom RPC endpoint or use default
   const endpoint = useMemo(() => {
     if (process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT) {
@@ -37,12 +38,14 @@ export function SolanaProviders({ children }: { children: React.ReactNode }) {
   );
 
   return (
-    <ConnectionProvider endpoint={endpoint}>
-      <WalletProvider wallets={wallets} autoConnect>
-        <WalletModalProvider>
-          {children}
-        </WalletModalProvider>
-      </WalletProvider>
-    </ConnectionProvider>
+    <SolanaClientProvider endpoint={endpoint}>
+      <ConnectionProvider endpoint={endpoint}>
+        <WalletProvider wallets={wallets} autoConnect>
+          <WalletModalProvider>
+            {children}
+          </WalletModalProvider>
+        </WalletProvider>
+      </ConnectionProvider>
+    </SolanaClientProvider>
   );
 }
