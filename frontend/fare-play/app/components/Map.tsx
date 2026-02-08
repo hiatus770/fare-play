@@ -19,10 +19,26 @@ interface Stop {
     routes: string[];
 }
 
+const getRouteColor = (tag: string): string => {
+    const colors: Record<string, string> = {
+        "501": "#FF6B6B",
+        "503": "#9B59B6",
+        "504": "#4ECDC4",
+        "505": "#3498DB",
+        "506": "#E74C3C",
+        "509": "#2ECC71",
+        "510": "#F8B22D",
+        "511": "#1ABC9C",
+        "512": "#E67E22",
+    };
+    return colors[tag] || "#4ECDC4";
+};
+
 const Map = () => {
     const mapContainer = useRef<HTMLDivElement>(null);
     const map = useRef<mapboxgl.Map | null>(null);
     const markersRef = useRef<mapboxgl.Marker[]>([]);
+    const streetcarDataRef = useRef<any>(null);
     const [mapLoaded, setMapLoaded] = useState(false);
     const [selectedStop, setSelectedStop] = useState<Stop | null>(null);
     const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
@@ -76,6 +92,11 @@ const Map = () => {
                     const sourceId = `ttc-${type}-routes`;
                     const layerId = `ttc-${type}-routes-layer`;
 
+                    // Store streetcar data for highlighting
+                    if (type === "streetcar") {
+                        streetcarDataRef.current = data;
+                    }
+
                     if (!mapInstance.getSource(sourceId)) {
                         mapInstance.addSource(sourceId, {
                             type: "geojson",
@@ -102,11 +123,61 @@ const Map = () => {
                                 "line-opacity": 0.9
                             }
                         });
+
+                        // Add highlight layer for streetcar routes
+                        if (type === "streetcar") {
+                            mapInstance.addLayer({
+                                id: "ttc-streetcar-highlight",
+                                type: "line",
+                                source: sourceId,
+                                layout: {
+                                    "line-join": "round",
+                                    "line-cap": "round"
+                                },
+                                paint: {
+                                    "line-color": "#4ECDC4",
+                                    "line-width": [
+                                        "interpolate",
+                                        ["linear"],
+                                        ["zoom"],
+                                        10, 3,
+                                        15, 6
+                                    ],
+                                    "line-opacity": 1
+                                },
+                                filter: ["==", ["get", "ROUTE_NAME"], ""]
+                            });
+                        }
                     }
                 })
                 .catch(err => console.error(`Error loading ${type} routes:`, err));
         });
     };
+
+    // Highlight selected route on the map
+    useEffect(() => {
+        if (!map.current || !mapLoaded) return;
+
+        const mapInstance = map.current;
+        if (!mapInstance.getLayer("ttc-streetcar-highlight")) return;
+
+        if (selectedRoute) {
+            // Try to match route number in the GeoJSON properties
+            // Toronto GIS typically uses LINENAME or ROUTE_NAME
+            mapInstance.setFilter("ttc-streetcar-highlight", [
+                "any",
+                ["==", ["get", "LINENAME"], selectedRoute],
+                ["==", ["get", "ROUTE_NAME"], selectedRoute],
+                ["in", selectedRoute, ["get", "LINENAME"]],
+                ["in", selectedRoute, ["get", "ROUTE_NAME"]]
+            ]);
+            // Set the highlight color to match the route's badge color
+            mapInstance.setPaintProperty("ttc-streetcar-highlight", "line-color", getRouteColor(selectedRoute));
+        } else {
+            // No route selected, hide highlight
+            mapInstance.setFilter("ttc-streetcar-highlight", ["==", ["get", "ROUTE_NAME"], ""]);
+        }
+    }, [selectedRoute, mapLoaded]);
 
     // Load stops from backend for selected route
     const loadStopsForRoute = useCallback(async (routeTag: string) => {
@@ -198,6 +269,9 @@ const Map = () => {
 
         if (routeTag && !stop) {
             // Route selected, load its stops
+            await loadStopsForRoute(routeTag);
+        } else if (routeTag && stop) {
+            // Stop selected directly (from search), load route stops to show markers
             await loadStopsForRoute(routeTag);
         } else if (!routeTag) {
             // Back to routes, clear stops

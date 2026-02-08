@@ -52,6 +52,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
   onStopSelect,
   mapCenter
 }) => {
+  const [nearbySearch, setNearbySearch] = useState("");
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteOption | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
@@ -146,7 +147,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
         seen.add(stop.tag);
         return true;
       })
-      .slice(0, 8);
+      .slice(0, 4);
 
     setNearbyStops(uniqueStops);
   };
@@ -392,6 +393,128 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
         </button>
       )}
 
+      {/* Search Bar - only show on main view */}
+      {!selectedRoute && (
+        <div style={{ position: "relative", marginBottom: "24px" }}>
+          <input
+            type="text"
+            placeholder="Search by stop name or number..."
+            value={nearbySearch}
+            onChange={(e) => setNearbySearch(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "14px 48px 14px 16px",
+              background: "#ffffff",
+              border: "2px solid #e9ecef",
+              borderRadius: "12px",
+              color: "#1a1a1a",
+              fontSize: "15px",
+              boxSizing: "border-box",
+              outline: "none",
+            }}
+          />
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            style={{
+              position: "absolute",
+              right: "16px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              pointerEvents: "none",
+            }}
+          >
+            <circle cx="11" cy="11" r="7" stroke="#9ca3af" strokeWidth="2" />
+            <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+
+          {/* Search Dropdown */}
+          {nearbySearch.trim().length >= 2 && (() => {
+            const searchLower = nearbySearch.toLowerCase();
+            const allStops: (Stop & { routeTag: string; distance: number })[] = [];
+            for (const [routeTag, stopsArr] of Object.entries(routeStopsCache)) {
+              for (const stop of stopsArr) {
+                if (
+                  stop.title.toLowerCase().includes(searchLower) ||
+                  stop.tag.toLowerCase().includes(searchLower)
+                ) {
+                  const distance = mapCenter ? getDistance(mapCenter.lat, mapCenter.lon, stop.lat, stop.lon) : 0;
+                  allStops.push({
+                    tag: stop.tag,
+                    title: stop.title,
+                    lat: stop.lat,
+                    lon: stop.lon,
+                    routes: [routeTag],
+                    routeTag,
+                    distance,
+                  });
+                }
+              }
+            }
+            const seen = new Set<string>();
+            const uniqueStops = allStops
+              .sort((a, b) => a.distance - b.distance)
+              .filter(stop => {
+                if (seen.has(stop.tag)) return false;
+                seen.add(stop.tag);
+                return true;
+              }).slice(0, 3);
+
+            if (uniqueStops.length === 0) return null;
+
+            return (
+              <ul style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                marginTop: "4px",
+                background: "#ffffff",
+                border: "2px solid #e9ecef",
+                borderRadius: "12px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                listStyle: "none",
+                padding: "8px",
+                zIndex: 100,
+              }}>
+                {uniqueStops.map((stop, idx) => (
+                  <li
+                    key={`search-${stop.routeTag}-${stop.tag}`}
+                    onClick={() => {
+                      handleNearbyStopSelect(stop);
+                      setNearbySearch("");
+                    }}
+                    style={{
+                      padding: "12px",
+                      marginBottom: idx < uniqueStops.length - 1 ? "4px" : "0",
+                      background: "#f8f9fa",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "#e9ecef";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "#f8f9fa";
+                    }}
+                  >
+                    <div style={{ fontSize: "14px", fontWeight: "500", color: "#1a1a1a" }}>
+                      {stop.title}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#6c757d", marginTop: "2px" }}>
+                      Stop #{stop.tag} • Route {stop.routeTag} • {(stop.distance * 1000).toFixed(0)}m away
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
+        </div>
+      )}
+
       {/* Nearby Stops Section */}
       {!selectedRoute && nearbyStops.length > 0 && (
         <div style={{
@@ -432,7 +555,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                   {stop.title}
                 </div>
                 <div style={{ fontSize: "13px", color: "#6c757d" }}>
-                  Route {stop.routeTag} • {(stop.distance * 1000).toFixed(0)}m away
+                  Stop #{stop.tag} • Route {stop.routeTag} • {(stop.distance * 1000).toFixed(0)}m away
                 </div>
               </li>
             ))}
@@ -810,51 +933,51 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                     .filter((fp) => fp.vehicle_id === selectedVehicle)
                     .slice(0, 3)
                     .map((fp, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      padding: "16px",
-                      marginBottom: idx < 2 && frozenPredictions.filter(f => f.vehicle_id === selectedVehicle).length > idx + 1 ? "12px" : "0",
-                      background: "#ffffff",
-                      borderRadius: "10px",
-                      border: "1.5px solid #e9ecef",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                      <div>
-                        <div style={{ color: "#6c757d", fontSize: "12px", marginBottom: "4px" }}>Predicted</div>
-                        <div style={{ color: "#1a1a1a", fontSize: "16px", fontWeight: "600" }}>
-                          {fp.frozen_prediction_display}
+                      <div
+                        key={idx}
+                        style={{
+                          padding: "16px",
+                          marginBottom: idx < 2 && frozenPredictions.filter(f => f.vehicle_id === selectedVehicle).length > idx + 1 ? "12px" : "0",
+                          background: "#ffffff",
+                          borderRadius: "10px",
+                          border: "1.5px solid #e9ecef",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+                          <div>
+                            <div style={{ color: "#6c757d", fontSize: "12px", marginBottom: "4px" }}>Predicted</div>
+                            <div style={{ color: "#1a1a1a", fontSize: "16px", fontWeight: "600" }}>
+                              {fp.frozen_prediction_display}
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ color: "#6c757d", fontSize: "12px", marginBottom: "4px" }}>Actual</div>
+                            <div
+                              style={{
+                                color: fp.status === "EARLY" ? "#0088CE" : "#DA2128",
+                                fontSize: "16px",
+                                fontWeight: "600",
+                              }}
+                            >
+                              {fp.actual_elapsed_display}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ color: "#6c757d", fontSize: "12px", marginBottom: "4px" }}>Actual</div>
                         <div
                           style={{
                             color: fp.status === "EARLY" ? "#0088CE" : "#DA2128",
-                            fontSize: "16px",
-                            fontWeight: "600",
+                            fontSize: "13px",
+                            fontWeight: "500",
                           }}
                         >
-                          {fp.actual_elapsed_display}
+                          {fp.status === "EARLY"
+                            ? `${Math.abs(parseInt(fp.error_display))}s early`
+                            : fp.status === "LATE"
+                              ? `${Math.abs(parseInt(fp.error_display))}s late`
+                              : "On time"}
                         </div>
                       </div>
-                    </div>
-                    <div
-                      style={{
-                        color: fp.status === "EARLY" ? "#0088CE" : "#DA2128",
-                        fontSize: "13px",
-                        fontWeight: "500",
-                      }}
-                    >
-                      {fp.status === "EARLY"
-                        ? `${Math.abs(parseInt(fp.error_display))}s early`
-                        : fp.status === "LATE"
-                        ? `${Math.abs(parseInt(fp.error_display))}s late`
-                        : "On time"}
-                    </div>
-                  </div>
-                ))}
+                    ))}
                 </>
               )}
 
