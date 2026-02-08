@@ -5,6 +5,7 @@ interface RouteOption {
   tag: string;
   name: string;
   color: string;
+  type?: string;
 }
 
 interface Stop {
@@ -42,6 +43,9 @@ const API_BASE = "http://localhost:5000";
 
 // Popular streetcar routes to show
 const STREETCAR_ROUTES = ["501", "504", "505", "506", "509", "510", "511", "512"];
+
+// Subway route tags
+const SUBWAY_ROUTES = ["1", "2", "3", "4", "5", "6"];
 
 // Routes to check for nearby stops
 const NEARBY_ROUTES = ["501", "504", "505", "506", "509", "510", "511", "512"];
@@ -194,11 +198,11 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
 
   // Helper to infer route type from tag/name if not provided
   function inferRouteType(route: any) {
-    if (route.name && route.name.toLowerCase().includes("subway")) return "subway";
-    if (route.name && route.name.toLowerCase().includes("bus")) return "bus";
-    if (route.name && route.name.toLowerCase().includes("streetcar")) return "streetcar";
-    if (route.tag && /^[0-9]{3}$/.test(route.tag)) return "bus";
-    if (route.tag && /^[0-9]{2,3}$/.test(route.tag)) return "streetcar";
+    const name = (route.name || "").toLowerCase();
+    const tag = String(route.tag || "");
+
+    if (SUBWAY_ROUTES.includes(tag) || name.includes("subway") || name.includes("line")) return "subway";
+    if (STREETCAR_ROUTES.includes(tag) || name.includes("streetcar")) return "streetcar";
     return "bus";
   }
 

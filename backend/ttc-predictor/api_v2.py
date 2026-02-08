@@ -18,6 +18,21 @@ db = PredictionDB()
 NEXTBUS_BASE_URL = "https://webservices.nextbus.com/service/publicXMLFeed"
 AGENCY = "ttc"
 
+# TTC route classification helpers
+SUBWAY_ROUTE_TAGS = {"1", "2", "3", "4", "5", "6"}
+STREETCAR_ROUTE_TAGS = {"501", "502", "503", "504", "505", "506", "508", "509", "510", "511", "512", "514"}
+
+
+def infer_route_type(route_tag: str, route_name: str) -> str:
+    name = (route_name or "").lower()
+    tag = str(route_tag or "")
+
+    if tag in SUBWAY_ROUTE_TAGS or "subway" in name or name.startswith("line "):
+        return "subway"
+    if tag in STREETCAR_ROUTE_TAGS or "streetcar" in name or "street car" in name:
+        return "streetcar"
+    return "bus"
+
 def get_current_predictions(route_tag, stop_tag):
     """Get CURRENT predictions from TTC API"""
     try:
@@ -296,6 +311,7 @@ def list_all_routes():
                 routes.append({
                     'tag': route_tag,
                     'name': route_name,
+                    'type': infer_route_type(route_tag, route_name),
                 })
 
         routes.sort(key=lambda r: r['tag'])
