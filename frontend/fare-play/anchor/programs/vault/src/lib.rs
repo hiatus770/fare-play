@@ -11,10 +11,7 @@ pub mod vault {
     use super::*;
 
     pub fn deposit(ctx: Context<VaultAction>, amount: u64) -> Result<()> {
-        require!(ctx.accounts.vault.lamports() == 0, VaultError::VaultAlreadyExists);
-
-        let rent = Rent::get()?.minimum_balance(0);
-        require!(amount > rent, VaultError::InvalidAmount);
+        require!(amount > 0, VaultError::InvalidAmount);
 
         transfer(
             CpiContext::new(
@@ -68,8 +65,6 @@ pub struct VaultAction<'info> {
 
 #[error_code]
 pub enum VaultError {
-    #[msg("Vault already exists")]
-    VaultAlreadyExists,
     #[msg("Invalid amount")]
     InvalidAmount,
 }

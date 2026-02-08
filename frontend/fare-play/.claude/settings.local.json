@@ -3,7 +3,11 @@
     "allow": [
       "Bash(del:*)",
       "Bash(node:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(solana --version:*)",
+      "Bash(anchor --version:*)",
+      "Bash(cargo --version:*)",
+      "Bash(where:*)"
     ]
   }
 }

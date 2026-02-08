@@ -13,13 +13,12 @@ import {
   type Address,
 } from "@solana/kit";
 import {
-  getDepositInstructionDataEncoder,
-  getWithdrawInstructionDataEncoder,
+  getDepositInstructionAsync,
+  getWithdrawInstructionAsync,
   VAULT_PROGRAM_ADDRESS,
 } from "../app/generated/vault";
 
 const LAMPORTS_PER_SOL = 1_000_000_000n;
-const SYSTEM_PROGRAM_ADDRESS = "11111111111111111111111111111111" as Address;
 
 export function useVault() {
   const { wallet, status } = useWalletConnection();
@@ -62,7 +61,7 @@ export function useVault() {
 
   const deposit = useCallback(
     async (amount: string) => {
-      if (!walletAddress || !vaultAddress || !amount) return;
+      if (!wallet || !amount) return;
 
       try {
         setTxStatus("Building transaction...");
@@ -71,17 +70,10 @@ export function useVault() {
           Math.floor(parseFloat(amount) * Number(LAMPORTS_PER_SOL))
         );
 
-        const instruction = {
-          programAddress: VAULT_PROGRAM_ADDRESS,
-          accounts: [
-            { address: walletAddress, role: 3 as const },
-            { address: vaultAddress, role: 1 as const },
-            { address: SYSTEM_PROGRAM_ADDRESS, role: 0 as const },
-          ],
-          data: getDepositInstructionDataEncoder().encode({
-            amount: depositAmount,
-          }),
-        };
+        const instruction = await getDepositInstructionAsync({
+          signer: wallet.account,
+          amount: depositAmount,
+        });
 
         setTxStatus("Awaiting signature...");
 
@@ -92,31 +84,34 @@ export function useVault() {
         setTxStatus(
           `Deposited! Tx: ${String(signature)?.slice(0, 20)}...`
         );
-      } catch (err) {
+      } catch (err: any) {
         console.error("Deposit failed:", err);
+        // Log the full error details including transactionPlanResult
+        if (err?.transactionPlanResult) {
+          console.error("Transaction plan result:", JSON.stringify(err.transactionPlanResult, null, 2));
+        }
+        if (err?.cause) {
+          console.error("Cause:", err.cause);
+        }
+        // Log all enumerable properties
+        console.error("Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
         setTxStatus(
-          `Error: ${err instanceof Error ? err.message : "Unknown error"}`
+          `Error: ${err?.message || "Unknown error"}`
         );
       }
     },
-    [walletAddress, vaultAddress, send]
+    [wallet, send]
   );
 
   const withdraw = useCallback(async () => {
-    if (!walletAddress || !vaultAddress) return;
+    if (!wallet) return;
 
     try {
       setTxStatus("Building transaction...");
 
-      const instruction = {
-        programAddress: VAULT_PROGRAM_ADDRESS,
-        accounts: [
-          { address: walletAddress, role: 3 as const },
-          { address: vaultAddress, role: 1 as const },
-          { address: SYSTEM_PROGRAM_ADDRESS, role: 0 as const },
-        ],
-        data: getWithdrawInstructionDataEncoder().encode({}),
-      };
+      const instruction = await getWithdrawInstructionAsync({
+        signer: wallet.account,
+      });
 
       setTxStatus("Awaiting signature...");
 
@@ -127,13 +122,20 @@ export function useVault() {
       setTxStatus(
         `Withdrawn! Tx: ${String(signature)?.slice(0, 20)}...`
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error("Withdraw failed:", err);
+      if (err?.transactionPlanResult) {
+        console.error("Transaction plan result:", JSON.stringify(err.transactionPlanResult, null, 2));
+      }
+      if (err?.cause) {
+        console.error("Cause:", err.cause);
+      }
+      console.error("Full error object:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
       setTxStatus(
-        `Error: ${err instanceof Error ? err.message : "Unknown error"}`
+        `Error: ${err?.message || "Unknown error"}`
       );
     }
-  }, [walletAddress, vaultAddress, send]);
+  }, [wallet, send]);
 
   const clearStatus = useCallback(() => setTxStatus(null), []);
 
