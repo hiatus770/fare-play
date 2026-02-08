@@ -1,0 +1,28 @@
+{
+  "routes": [
+    {
+      "tag": "501",
+      "name": "Queen Streetcar",
+      "stops": [
+        "1750",
+        "5479",
+        "6435"
+      ],
+      "enabled": true,
+      "notes": "Stops ~5-10 minutes apart along Lake Shore Blvd"
+    },
+    {
+      "tag": "503",
+      "name": "King Streetcar",
+      "stops": [
+        "24211",
+        "2501",
+        "1301"
+      ],
+      "enabled": true,
+      "notes": "Stops ~5-10 minutes apart along King/Queen corridor"
+    }
+  ],
+  "update_interval": 10,
+  "max_prediction_age": 1800
+}
