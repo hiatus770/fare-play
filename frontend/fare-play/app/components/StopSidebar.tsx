@@ -1,5 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { MarketList } from "./market-list";
+import { BetPanel } from "./bet-panel";
+import { CreateMarketPanel } from "./create-market-panel";
+import type { MarketData } from "../../hooks/useMarkets";
 
 interface RouteOption {
   tag: string;
@@ -31,11 +35,21 @@ interface FrozenPrediction {
   status: string;
 }
 
+type SidebarTab = "predictions" | "markets" | "mybets";
+
 interface StopSidebarProps {
   selectedStop?: Stop | null;
   selectedRoute?: string | null;
   onStopSelect?: (stop: Stop | null, route: string | null) => void;
   mapCenter?: { lat: number; lon: number };
+  // Market props from Map
+  markets?: MarketData[];
+  resolvedMarkets?: MarketData[];
+  marketsLoading?: boolean;
+  refetchMarkets?: () => void;
+  walletAddress?: string;
+  offChainBalance?: number;
+  refetchBalance?: () => void;
 }
 
 const API_BASE = "http://localhost:5000";
@@ -46,11 +60,20 @@ const STREETCAR_ROUTES = ["501", "504", "505", "506", "509", "510", "511", "512"
 // Routes to check for nearby stops
 const NEARBY_ROUTES = ["501", "504", "505", "506", "509", "510", "511", "512"];
 
+const LAMPORTS_PER_SOL = 1_000_000_000;
+
 const StopSidebar: React.FC<StopSidebarProps> = ({
   selectedStop: externalStop,
   selectedRoute: externalRoute,
   onStopSelect,
-  mapCenter
+  mapCenter,
+  markets = [],
+  resolvedMarkets = [],
+  marketsLoading = false,
+  refetchMarkets,
+  walletAddress,
+  offChainBalance = 0,
+  refetchBalance,
 }) => {
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteOption | null>(null);
@@ -68,6 +91,10 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
   const [loading, setLoading] = useState(false);
   const [loadingStops, setLoadingStops] = useState(false);
   const [loadingNearby, setLoadingNearby] = useState(false);
+  // Market tab state
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>("predictions");
+  const [selectedBet, setSelectedBet] = useState<{ market: MarketData; outcome: string } | null>(null);
+  const [myBets, setMyBets] = useState<any[]>([]);
   const [nearbyStops, setNearbyStops] = useState<(Stop & { distance: number; routeTag: string })[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -333,6 +360,40 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       setLoading(false);
     }
   };
+
+  // LMSR market betting handlers
+  const handleMarketBet = (market: MarketData, outcome: string) => {
+    setSelectedBet({ market, outcome });
+  };
+
+  const handleBetSuccess = () => {
+    setSelectedBet(null);
+    refetchMarkets?.();
+    refetchBalance?.();
+  };
+
+  // Fetch my bets when tab switches
+  useEffect(() => {
+    if (sidebarTab !== "mybets" || !walletAddress) return;
+    const fetchMyBets = async () => {
+      try {
+        const allMarkets = [...markets, ...resolvedMarkets];
+        const bets: any[] = [];
+        for (const m of allMarkets) {
+          const resp = await fetch(`/api/markets/${m.id}`);
+          const data = await resp.json();
+          const myTrades = (data.trades ?? []).filter(
+            (t: any) => t.wallet === walletAddress
+          );
+          for (const t of myTrades) {
+            bets.push({ ...t, market: data.market });
+          }
+        }
+        setMyBets(bets);
+      } catch { /* silent */ }
+    };
+    fetchMyBets();
+  }, [sidebarTab, walletAddress, markets.length, resolvedMarkets.length]);
 
   const handleBack = () => {
     if (selectedStop) {
@@ -966,6 +1027,163 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           )}
         </div>
       )}
+
+      {/* ─── Markets Section ─── */}
+      <div style={{
+        width: "100%",
+        marginTop: "24px",
+        background: "#f8f9fa",
+        borderRadius: "12px",
+        padding: "20px",
+        border: "2px solid #e9ecef",
+      }}>
+        {/* Tab Bar */}
+        <div style={{ display: "flex", gap: "4px", marginBottom: "14px" }}>
+          {([
+            { key: "predictions" as SidebarTab, label: "Predictions" },
+            { key: "markets" as SidebarTab, label: "Markets" },
+            { key: "mybets" as SidebarTab, label: "My Bets" },
+          ]).map((t) => (
+            <button
+              key={t.key}
+              onClick={() => { setSidebarTab(t.key); setSelectedBet(null); }}
+              style={{
+                flex: 1,
+                padding: "8px 0",
+                borderRadius: "8px",
+                border: "1.5px solid " + (sidebarTab === t.key ? "#0088CE" : "#dee2e6"),
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                background: sidebarTab === t.key ? "#e8f4fd" : "#ffffff",
+                color: sidebarTab === t.key ? "#0088CE" : "#6c757d",
+                transition: "all 0.15s",
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Off-chain balance bar */}
+        {walletAddress && (
+          <div style={{
+            fontSize: "13px",
+            color: "#6c757d",
+            marginBottom: "12px",
+            padding: "8px 12px",
+            background: "#ffffff",
+            borderRadius: "8px",
+            border: "1.5px solid #e9ecef",
+          }}>
+            Betting Balance:{" "}
+            <span style={{ color: "#1a1a1a", fontWeight: 600 }}>
+              {(offChainBalance / LAMPORTS_PER_SOL).toFixed(4)} SOL
+            </span>
+          </div>
+        )}
+
+        {/* Bet Panel (shown inline) */}
+        {selectedBet && walletAddress && (
+          <div style={{
+            background: "#ffffff",
+            borderRadius: "10px",
+            padding: "16px",
+            marginBottom: "12px",
+            border: "1.5px solid #e9ecef",
+          }}>
+            <BetPanel
+              market={selectedBet.market}
+              selectedOutcome={selectedBet.outcome}
+              walletAddress={walletAddress}
+              offChainBalance={offChainBalance}
+              onClose={() => setSelectedBet(null)}
+              onSuccess={handleBetSuccess}
+            />
+          </div>
+        )}
+
+        {/* Tab Content: Predictions (create market from live vehicles) */}
+        {sidebarTab === "predictions" && (
+          <CreateMarketPanel onCreated={() => refetchMarkets?.()} />
+        )}
+
+        {/* Tab Content: Markets */}
+        {sidebarTab === "markets" && (
+          <MarketList
+            markets={markets}
+            resolvedMarkets={resolvedMarkets}
+            loading={marketsLoading}
+            onBet={walletAddress ? handleMarketBet : undefined}
+          />
+        )}
+
+        {/* Tab Content: My Bets */}
+        {sidebarTab === "mybets" && (
+          <div>
+            {!walletAddress ? (
+              <div style={{ color: "#6c757d", fontSize: "14px", textAlign: "center", padding: "20px" }}>
+                Connect wallet to see your bets
+              </div>
+            ) : myBets.length === 0 ? (
+              <div style={{ color: "#6c757d", fontSize: "14px", textAlign: "center", padding: "20px" }}>
+                No bets placed yet
+              </div>
+            ) : (
+              <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                {myBets.map((bet) => (
+                  <div
+                    key={bet.id}
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: "10px",
+                      padding: "14px",
+                      marginBottom: "8px",
+                      border: "1.5px solid #e9ecef",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                      <span style={{ fontWeight: 600, fontSize: "14px", color: "#1a1a1a" }}>
+                        Route {bet.market?.route_tag} &middot; Vehicle {bet.market?.vehicle_id}
+                      </span>
+                      <span style={{
+                        fontSize: "11px",
+                        padding: "2px 8px",
+                        borderRadius: "6px",
+                        fontWeight: 600,
+                        background: bet.outcome === "EARLY" ? "#e8f5e9" : bet.outcome === "ON_TIME" ? "#fff8e1" : "#ffebee",
+                        color: bet.outcome === "EARLY" ? "#2e7d32" : bet.outcome === "ON_TIME" ? "#f57f17" : "#c62828",
+                      }}>
+                        {bet.outcome}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: "13px", color: "#6c757d" }}>
+                      {bet.shares.toFixed(2)} shares &middot; Cost: {(bet.cost_lamports / LAMPORTS_PER_SOL).toFixed(6)} SOL
+                    </div>
+                    {bet.market?.status === "resolved" && (
+                      <div style={{
+                        fontSize: "13px",
+                        marginTop: "6px",
+                        color: bet.market.resolved_outcome === bet.outcome ? "#2e7d32" : "#c62828",
+                        fontWeight: 600,
+                      }}>
+                        {bet.market.resolved_outcome === bet.outcome
+                          ? `Won! Payout: ${(bet.payout_lamports / LAMPORTS_PER_SOL).toFixed(6)} SOL`
+                          : `Lost — Resolved: ${bet.market.resolved_outcome}`}
+                      </div>
+                    )}
+                    {bet.market?.status === "open" && (
+                      <div style={{ fontSize: "13px", marginTop: "6px", color: "#0088CE", fontWeight: 500 }}>
+                        Pending...
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
     </div>
   );

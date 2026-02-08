@@ -98,18 +98,18 @@ export function BetPanel({
   const balanceSol = (offChainBalance / LAMPORTS_PER_SOL).toFixed(4);
   const insufficientBalance = amountLamports > offChainBalance;
 
-  const outcomes: Array<{ key: Outcome; label: string; color: string }> = [
-    { key: "EARLY", label: "Early", color: "#4ade80" },
-    { key: "ON_TIME", label: "On Time", color: "#facc15" },
-    { key: "LATE", label: "Late", color: "#f87171" },
+  const outcomes: Array<{ key: Outcome; label: string; color: string; bg: string }> = [
+    { key: "EARLY", label: "Early", color: "#2e7d32", bg: "#e8f5e9" },
+    { key: "ON_TIME", label: "On Time", color: "#f57f17", bg: "#fff8e1" },
+    { key: "LATE", label: "Late", color: "#c62828", bg: "#ffebee" },
   ];
 
   return (
-    <div style={panelStyle}>
+    <div>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-        <span style={{ fontWeight: 700, fontSize: "15px", color: "#fff" }}>
-          Place Bet — Route {market.route_tag} Vehicle {market.vehicle_id}
+        <span style={{ fontWeight: 700, fontSize: "15px", color: "#1a1a1a" }}>
+          Place Bet — Route {market.route_tag}
         </span>
         <button onClick={onClose} style={closeBtnStyle}>
           &times;
@@ -117,7 +117,7 @@ export function BetPanel({
       </div>
 
       {/* Balance */}
-      <div style={{ fontSize: "12px", color: "#888", marginBottom: "12px" }}>
+      <div style={{ fontSize: "12px", color: "#6c757d", marginBottom: "12px" }}>
         Betting balance: {balanceSol} SOL
       </div>
 
@@ -130,13 +130,14 @@ export function BetPanel({
             style={{
               flex: 1,
               padding: "8px 0",
-              borderRadius: "6px",
+              borderRadius: "8px",
               border: `2px solid ${o.color}`,
-              background: outcome === o.key ? o.color : "transparent",
-              color: outcome === o.key ? "#000" : o.color,
+              background: outcome === o.key ? o.color : o.bg,
+              color: outcome === o.key ? "#fff" : o.color,
               fontSize: "13px",
               fontWeight: 700,
               cursor: "pointer",
+              transition: "all 0.15s",
             }}
           >
             {o.label}
@@ -146,7 +147,7 @@ export function BetPanel({
 
       {/* Amount input */}
       <div style={{ marginBottom: "12px" }}>
-        <label style={{ fontSize: "12px", color: "#888", display: "block", marginBottom: "4px" }}>
+        <label style={{ fontSize: "12px", color: "#6c757d", display: "block", marginBottom: "4px" }}>
           Amount (SOL)
         </label>
         <input
@@ -161,24 +162,24 @@ export function BetPanel({
 
       {/* Preview */}
       {preview && preview.shares > 0 && (
-        <div style={{ background: "#1a1a1a", borderRadius: "8px", padding: "10px", marginBottom: "12px", border: "1px solid #333" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#ccc", marginBottom: "4px" }}>
+        <div style={{ background: "#f8f9fa", borderRadius: "8px", padding: "10px", marginBottom: "12px", border: "1.5px solid #e9ecef" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#495057", marginBottom: "4px" }}>
             <span>Shares</span>
             <span>{preview.shares.toFixed(2)}</span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#ccc", marginBottom: "4px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#495057", marginBottom: "4px" }}>
             <span>Potential payout</span>
             <span>{(preview.potentialPayout / LAMPORTS_PER_SOL).toFixed(6)} SOL</span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#ccc", marginBottom: "4px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#495057", marginBottom: "4px" }}>
             <span>Current price</span>
             <span>{(preview.currentPrice * 100).toFixed(1)}%</span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#ccc" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#495057" }}>
             <span>Price after</span>
             <span>
               {(preview.newPrice * 100).toFixed(1)}%
-              <span style={{ color: preview.priceImpact > 0 ? "#f87171" : "#4ade80", marginLeft: "4px" }}>
+              <span style={{ color: preview.priceImpact > 0 ? "#c62828" : "#2e7d32", marginLeft: "4px" }}>
                 ({preview.priceImpact > 0 ? "+" : ""}
                 {(preview.priceImpact * 100).toFixed(1)}%)
               </span>
@@ -189,10 +190,10 @@ export function BetPanel({
 
       {/* Error */}
       {error && (
-        <div style={{ color: "#f87171", fontSize: "13px", marginBottom: "8px" }}>{error}</div>
+        <div style={{ color: "#c62828", fontSize: "13px", marginBottom: "8px" }}>{error}</div>
       )}
       {insufficientBalance && (
-        <div style={{ color: "#f87171", fontSize: "13px", marginBottom: "8px" }}>
+        <div style={{ color: "#c62828", fontSize: "13px", marginBottom: "8px" }}>
           Insufficient balance. Deposit more SOL.
         </div>
       )}
@@ -213,18 +214,10 @@ export function BetPanel({
   );
 }
 
-const panelStyle: React.CSSProperties = {
-  background: "#252525",
-  borderRadius: "10px",
-  padding: "16px",
-  marginBottom: "10px",
-  border: "1px solid #444",
-};
-
 const closeBtnStyle: React.CSSProperties = {
   background: "transparent",
   border: "none",
-  color: "#888",
+  color: "#6c757d",
   fontSize: "20px",
   cursor: "pointer",
   padding: "0 4px",
@@ -234,21 +227,23 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
   borderRadius: "8px",
-  border: "1px solid #444",
-  background: "#1a1a1a",
-  color: "#fff",
+  border: "1.5px solid #dee2e6",
+  background: "#ffffff",
+  color: "#1a1a1a",
   fontSize: "14px",
   outline: "none",
+  boxSizing: "border-box",
 };
 
 const confirmBtnStyle: React.CSSProperties = {
   width: "100%",
-  padding: "12px",
-  borderRadius: "8px",
+  padding: "14px",
+  borderRadius: "10px",
   border: "none",
-  background: "#fff",
-  color: "#000",
+  background: "linear-gradient(135deg, #0088CE 0%, #0066AA 100%)",
+  color: "#ffffff",
   fontSize: "15px",
-  fontWeight: 600,
+  fontWeight: 700,
   cursor: "pointer",
+  transition: "all 0.15s",
 };

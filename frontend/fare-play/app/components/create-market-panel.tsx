@@ -98,13 +98,14 @@ export function CreateMarketPanel({ onCreated }: CreateMarketPanelProps) {
             style={{
               flex: 1,
               padding: "8px",
-              borderRadius: "6px",
-              border: "1px solid #444",
-              background: selectedRoute === r.tag ? "#333" : "transparent",
-              color: selectedRoute === r.tag ? "#fff" : "#888",
+              borderRadius: "8px",
+              border: "1.5px solid " + (selectedRoute === r.tag ? "#0088CE" : "#dee2e6"),
+              background: selectedRoute === r.tag ? "#e8f4fd" : "#ffffff",
+              color: selectedRoute === r.tag ? "#0088CE" : "#6c757d",
               fontSize: "13px",
               fontWeight: 600,
               cursor: "pointer",
+              transition: "all 0.15s",
             }}
           >
             {r.tag} {r.name}
@@ -114,7 +115,7 @@ export function CreateMarketPanel({ onCreated }: CreateMarketPanelProps) {
 
       {/* Stop input */}
       <div style={{ marginBottom: "10px" }}>
-        <label style={{ fontSize: "12px", color: "#888", display: "block", marginBottom: "4px" }}>
+        <label style={{ fontSize: "12px", color: "#6c757d", display: "block", marginBottom: "4px" }}>
           Stop Tag
         </label>
         <div style={{ display: "flex", gap: "6px" }}>
@@ -132,23 +133,23 @@ export function CreateMarketPanel({ onCreated }: CreateMarketPanelProps) {
       </div>
 
       {error && (
-        <div style={{ color: "#f87171", fontSize: "13px", marginBottom: "8px" }}>{error}</div>
+        <div style={{ color: "#c62828", fontSize: "13px", marginBottom: "8px" }}>{error}</div>
       )}
 
       {/* Vehicle list */}
       <div style={{ maxHeight: "300px", overflowY: "auto" }}>
         {predictions.length === 0 && !loading ? (
-          <div style={{ color: "#888", fontSize: "13px", textAlign: "center", padding: "16px" }}>
+          <div style={{ color: "#6c757d", fontSize: "13px", textAlign: "center", padding: "16px" }}>
             No vehicles with ETA &gt; 2 min
           </div>
         ) : (
           predictions.map((p) => (
             <div key={p.vehicle_id} style={vehicleRowStyle}>
               <div>
-                <div style={{ fontWeight: 600, fontSize: "14px", color: "#fff" }}>
+                <div style={{ fontWeight: 600, fontSize: "14px", color: "#1a1a1a" }}>
                   Vehicle {p.vehicle_id}
                 </div>
-                <div style={{ fontSize: "12px", color: "#888" }}>
+                <div style={{ fontSize: "12px", color: "#6c757d" }}>
                   {p.direction} &middot; ETA: {p.current_eta_display} ({p.current_eta_seconds}s)
                 </div>
               </div>
@@ -157,14 +158,15 @@ export function CreateMarketPanel({ onCreated }: CreateMarketPanelProps) {
                 disabled={creating === p.vehicle_id}
                 style={{
                   padding: "6px 14px",
-                  borderRadius: "6px",
-                  border: "1px solid #4ade80",
-                  background: "transparent",
-                  color: "#4ade80",
+                  borderRadius: "8px",
+                  border: "1.5px solid #2e7d32",
+                  background: "#e8f5e9",
+                  color: "#2e7d32",
                   fontSize: "12px",
                   fontWeight: 600,
                   cursor: creating === p.vehicle_id ? "not-allowed" : "pointer",
                   opacity: creating === p.vehicle_id ? 0.5 : 1,
+                  transition: "all 0.15s",
                 }}
               >
                 {creating === p.vehicle_id ? "Creating..." : "Create Market"}
@@ -181,30 +183,32 @@ const inputStyle: React.CSSProperties = {
   flex: 1,
   padding: "8px 12px",
   borderRadius: "8px",
-  border: "1px solid #444",
-  background: "#1a1a1a",
-  color: "#fff",
+  border: "1.5px solid #dee2e6",
+  background: "#ffffff",
+  color: "#1a1a1a",
   fontSize: "14px",
   outline: "none",
+  boxSizing: "border-box",
 };
 
 const refreshBtnStyle: React.CSSProperties = {
   padding: "8px 14px",
-  borderRadius: "6px",
-  border: "1px solid #444",
-  background: "#333",
-  color: "#fff",
+  borderRadius: "8px",
+  border: "1.5px solid #dee2e6",
+  background: "#f8f9fa",
+  color: "#1a1a1a",
   fontSize: "13px",
   cursor: "pointer",
+  transition: "all 0.15s",
 };
 
 const vehicleRowStyle: React.CSSProperties = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  background: "#1e1e1e",
-  borderRadius: "8px",
-  padding: "10px 12px",
+  background: "#ffffff",
+  borderRadius: "10px",
+  padding: "12px 14px",
   marginBottom: "6px",
-  border: "1px solid #333",
+  border: "1.5px solid #e9ecef",
 };

@@ -24,8 +24,9 @@ export function MarketList({ markets, resolvedMarkets, loading, onBet }: MarketL
           onClick={() => setTab("active")}
           style={{
             ...tabStyle,
-            background: tab === "active" ? "#333" : "transparent",
-            color: tab === "active" ? "#fff" : "#888",
+            background: tab === "active" ? "#e8f4fd" : "#ffffff",
+            color: tab === "active" ? "#0088CE" : "#6c757d",
+            border: "1.5px solid " + (tab === "active" ? "#0088CE" : "#dee2e6"),
           }}
         >
           Active ({markets.length})
@@ -34,8 +35,9 @@ export function MarketList({ markets, resolvedMarkets, loading, onBet }: MarketL
           onClick={() => setTab("resolved")}
           style={{
             ...tabStyle,
-            background: tab === "resolved" ? "#333" : "transparent",
-            color: tab === "resolved" ? "#fff" : "#888",
+            background: tab === "resolved" ? "#e8f4fd" : "#ffffff",
+            color: tab === "resolved" ? "#0088CE" : "#6c757d",
+            border: "1.5px solid " + (tab === "resolved" ? "#0088CE" : "#dee2e6"),
           }}
         >
           Resolved ({resolvedMarkets.length})
@@ -45,11 +47,11 @@ export function MarketList({ markets, resolvedMarkets, loading, onBet }: MarketL
       {/* Content */}
       <div style={{ maxHeight: "400px", overflowY: "auto" }}>
         {loading ? (
-          <div style={{ color: "#888", fontSize: "14px", textAlign: "center", padding: "20px" }}>
+          <div style={{ color: "#6c757d", fontSize: "14px", textAlign: "center", padding: "20px" }}>
             Loading markets...
           </div>
         ) : displayedMarkets.length === 0 ? (
-          <div style={{ color: "#888", fontSize: "14px", textAlign: "center", padding: "20px" }}>
+          <div style={{ color: "#6c757d", fontSize: "14px", textAlign: "center", padding: "20px" }}>
             {tab === "active" ? "No active markets" : "No resolved markets"}
           </div>
         ) : (
@@ -69,9 +71,9 @@ export function MarketList({ markets, resolvedMarkets, loading, onBet }: MarketL
 const tabStyle: React.CSSProperties = {
   flex: 1,
   padding: "8px 12px",
-  borderRadius: "6px",
-  border: "none",
+  borderRadius: "8px",
   fontSize: "13px",
   fontWeight: 600,
   cursor: "pointer",
+  transition: "all 0.15s",
 };
