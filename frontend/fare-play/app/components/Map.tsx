@@ -7,49 +7,171 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "YOUR_MAPBOX_ACCESS_TOKEN";
 
 const Map = () => {
-    const mapContainer = useRef(null);
-    const map = useRef(null);
+    const mapContainer = useRef<HTMLDivElement>(null);
+    const map = useRef<mapboxgl.Map | null>(null);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const [userLocation, setUserLocation] = useState(null);
+    const [mapLoaded, setMapLoaded] = useState(false);
 
     useEffect(() => {
-    if (map.current) return;
+        if (map.current) return;
 
-    map.current = new mapboxgl.Map({
-        container: mapContainer.current,
-        style: "mapbox://styles/mapbox/dark-v10",
-        center: [-79.3832, 43.6455],
-        zoom: 14,
+        map.current = new mapboxgl.Map({
+            container: mapContainer.current!,
+            style: "mapbox://styles/mapbox/dark-v10",
+            center: [-79.3832, 43.6455],
+            zoom: 11,
             // Restrict map bounds to Toronto/GTA polygon
             maxBounds: [
                 [-79.9646922, 43.4678844], // southwest (bottom left)
                 [-79.0033885, 43.8830605]  // northeast (top right)
             ]
-    });
-
-    map.current.on("load", () => {
-        map.current.addSource("ttc-stops", {
-            type: "geojson",
-            data: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/1/query?where=1=1&outFields=*&f=geojson"
         });
 
-        map.current.addLayer({
-            id: "ttc-stops-layer",
-            type: "circle",
-            source: "ttc-stops",
-            paint: {
-                "circle-radius": 4,
-                "circle-opacity": 0.8
-            }
+        map.current.on("load", () => {
+            setMapLoaded(true);
+            
+            // Load TTC Routes from separate layers (Bus=10, Subway=11, Streetcar=12)
+            const routeEndpoints = [
+                { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/10/query?where=1=1&outFields=*&f=geojson", type: "bus", color: "#0088CE", width: 1.5 },
+                { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/11/query?where=1=1&outFields=*&f=geojson", type: "subway", color: "#DA2128", width: 4 },
+                { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/12/query?where=1=1&outFields=*&f=geojson", type: "streetcar", color: "#F8B22D", width: 2.5 }
+            ];
+
+            const mapInstance = map.current!;
+            routeEndpoints.forEach(({ url, type, color, width }) => {
+                fetch(url)
+                    .then(res => res.json())
+                    .then(data => {
+                        console.log(`${type} routes loaded:`, data.features?.length, "routes");
+
+                        const sourceId = `ttc-${type}-routes`;
+                        const layerId = `ttc-${type}-routes-layer`;
+
+                        if (!mapInstance.getSource(sourceId)) {
+                            mapInstance.addSource(sourceId, {
+                                type: "geojson",
+                                data: data
+                            });
+
+                            mapInstance.addLayer({
+                                id: layerId,
+                                type: "line",
+                                source: sourceId,
+                                layout: {
+                                    "line-join": "round",
+                                    "line-cap": "round"
+                                },
+                                paint: {
+                                    "line-color": color,
+                                    "line-width": [
+                                        "interpolate",
+                                        ["linear"],
+                                        ["zoom"],
+                                        10, width * 0.5,
+                                        15, width
+                                    ],
+                                    "line-opacity": 0.9
+                                }
+                            });
+
+                            // Add click handler for routes
+                            mapInstance.on("click", layerId, (e) => {
+                                if (!e.features?.[0]) return;
+                                const properties = e.features[0].properties || {};
+                                const routeTypeName = type.charAt(0).toUpperCase() + type.slice(1);
+
+                                new mapboxgl.Popup()
+                                    .setLngLat(e.lngLat)
+                                    .setHTML(`
+                                        <div style="color: #000; padding: 4px;">
+                                            <strong>${properties.RTE_LABEL || properties.ROUTE_NAME || properties.RTE || "Route"}</strong><br/>
+                                            Type: ${routeTypeName}<br/>
+                                            ${properties.RTE_DESC || properties.ROUTE_DESC || ""}
+                                        </div>
+                                    `)
+                                    .addTo(mapInstance);
+                            });
+
+                            // Change cursor on hover
+                            mapInstance.on("mouseenter", layerId, () => {
+                                mapInstance.getCanvas().style.cursor = "pointer";
+                            });
+                            mapInstance.on("mouseleave", layerId, () => {
+                                mapInstance.getCanvas().style.cursor = "";
+                            });
+                        }
+                    })
+                    .catch(err => {
+                        console.error(`Error loading ${type} routes:`, err);
+                    });
+            });
+
+            // Then add TTC Stops (circles) - these will appear on top
+            fetch("https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/1/query?where=1=1&outFields=*&f=geojson")
+                .then(res => res.json())
+                .then(data => {
+                    console.log("Stops data loaded:", data.features?.length, "stops");
+
+                    if (!mapInstance.getSource("ttc-stops")) {
+                        mapInstance.addSource("ttc-stops", {
+                            type: "geojson",
+                            data: data
+                        });
+
+                        mapInstance.addLayer({
+                            id: "ttc-stops-layer",
+                            type: "circle",
+                            source: "ttc-stops",
+                            paint: {
+                                "circle-radius": [
+                                    "interpolate",
+                                    ["linear"],
+                                    ["zoom"],
+                                    10, 2,
+                                    15, 5
+                                ],
+                                "circle-color": "#ffffff",
+                                "circle-opacity": 0.9,
+                                "circle-stroke-width": 1,
+                                "circle-stroke-color": "#000000"
+                            }
+                        });
+
+                        // Add click handler for stops
+                        mapInstance.on("click", "ttc-stops-layer", (e) => {
+                            if (!e.features?.[0]) return;
+                            const properties = e.features[0].properties || {};
+
+                            new mapboxgl.Popup()
+                                .setLngLat(e.lngLat)
+                                .setHTML(`
+                                    <div style="color: #000; padding: 4px;">
+                                        <strong>${properties.STOP_NAME || "TTC Stop"}</strong><br/>
+                                        Stop ID: ${properties.STOP_ID || "N/A"}
+                                    </div>
+                                `)
+                                .addTo(mapInstance);
+                        });
+
+                        // Change cursor on hover
+                        mapInstance.on("mouseenter", "ttc-stops-layer", () => {
+                            mapInstance.getCanvas().style.cursor = "pointer";
+                        });
+                        mapInstance.on("mouseleave", "ttc-stops-layer", () => {
+                            mapInstance.getCanvas().style.cursor = "";
+                        });
+                    }
+                })
+                .catch(err => {
+                    console.error("Error loading stops:", err);
+                });
         });
-
-    });
-}, []);
-
+    }, []);
 
     const handleSearch = async (e) => {
         e.preventDefault();
@@ -104,7 +226,7 @@ const Map = () => {
             }
         };
         fetchSuggestions();
-    }, [search]);
+    }, [search, userLocation]);
 
     const handleSuggestionClick = (feature) => {
         setSearch(feature.place_name);
@@ -214,6 +336,41 @@ const Map = () => {
                         </ul>
                     )}
                 </div>
+
+                {/* Legend for route types */}
+                <div style={{
+                    width: "100%",
+                    marginTop: "24px",
+                    background: "#232323",
+                    borderRadius: "8px",
+                    padding: "16px",
+                    color: "#fff",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+                }}>
+                    <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Legend</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                            <div style={{ width: "40px", height: "3px", background: "#DA2128" }}></div>
+                            <span>Subway</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                            <div style={{ width: "40px", height: "2.5px", background: "#F8B22D" }}></div>
+                            <span>Streetcar</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                            <div style={{ width: "40px", height: "2px", background: "#0088CE" }}></div>
+                            <span>Bus</span>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
+                            <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ffffff", border: "1px solid #000" }}></div>
+                            <span>Stops</span>
+                        </div>
+                    </div>
+                    <div style={{ marginTop: "12px", fontSize: "13px", color: "#aaa", fontStyle: "italic" }}>
+                        {mapLoaded ? "✓ Map loaded - zoom in to see routes" : "Loading map..."}
+                    </div>
+                </div>
+
                 {/* Nearby Stops Section */}
                 <div style={{
                     width: "100%",
@@ -233,8 +390,20 @@ const Map = () => {
                         <li style={{ padding: "8px 0" }}>Stop 5 (placeholder)</li>
                     </ul>
                 </div>
+                
+                {error && (
+                    <div style={{ 
+                        color: "#ff6b6b", 
+                        marginTop: "12px",
+                        padding: "12px",
+                        background: "rgba(255, 107, 107, 0.1)",
+                        borderRadius: "6px",
+                        fontSize: "14px"
+                    }}>
+                        {error}
+                    </div>
+                )}
             </div>
-            {error && <div style={{ color: "#ff6b6b", marginTop: "8px" }}>{error}</div>}
         </>
     );
 };
