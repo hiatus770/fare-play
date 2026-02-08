@@ -143,7 +143,7 @@ async function cancelMarket(marketId: string) {
  */
 async function getFrozenMarkets(): Promise<Market[]> {
   try {
-    const response = await fetch(`${API_BASE_URL}/api/betting/markets/list?status=FROZEN`, {
+    const response = await fetch(`${API_BASE_URL}/api/betting/markets?status=FROZEN`, {
       cache: 'no-store',
     });
 
@@ -239,11 +239,9 @@ async function main() {
 }
 
 // Run the worker
-if (require.main === module) {
-  main().catch((error) => {
-    console.error('❌ Fatal error in market resolver:', error);
-    process.exit(1);
-  });
-}
+main().catch((error) => {
+  console.error('❌ Fatal error in market resolver:', error);
+  process.exit(1);
+});
 
 export { freezeMarkets, processResolutions, checkTTCArrival };

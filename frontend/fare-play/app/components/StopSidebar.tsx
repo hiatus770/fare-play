@@ -46,7 +46,7 @@ interface FrozenPrediction {
   status: string;
 }
 
-type SidebarTab = "predictions" | "markets" | "mybets";
+type SidebarTab = "predictions" | "markets" | "mybets" | "winnings";
 
 interface StopSidebarProps {
   selectedStop?: Stop | null;
@@ -55,7 +55,6 @@ interface StopSidebarProps {
   mapCenter?: { lat: number; lon: number };
   // Market props from Map
   markets?: MarketData[];
-  resolvedMarkets?: MarketData[];
   marketsLoading?: boolean;
   refetchMarkets?: () => void;
   walletAddress?: string;
@@ -80,7 +79,6 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
   onStopSelect,
   mapCenter,
   markets = [],
-  resolvedMarkets = [],
   marketsLoading = false,
   refetchMarkets,
   walletAddress: externalWalletAddress,
@@ -112,6 +110,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
   const [sidebarTab, setSidebarTab] = useState<SidebarTab>("predictions");
   const [selectedBet, setSelectedBet] = useState<{ market: MarketData; outcome: string } | null>(null);
   const [myBets, setMyBets] = useState<any[]>([]);
+  const [resolvedMarkets, setResolvedMarkets] = useState<any[]>([]);
   const [nearbyStops, setNearbyStops] = useState<(Stop & { distance: number; routeTag: string })[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -617,6 +616,29 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       }
     };
     fetchAllBets();
+  }, [sidebarTab]);
+
+  // Fetch resolved markets when winnings tab is selected
+  useEffect(() => {
+    if (sidebarTab !== "winnings") return;
+    const fetchResolvedMarkets = async () => {
+      try {
+        console.log('🏆 Fetching resolved markets with winnings');
+        const resp = await fetch(`/api/betting/markets/resolved`);
+        if (!resp.ok) {
+          console.error('Failed to fetch resolved markets:', resp.statusText);
+          setResolvedMarkets([]);
+          return;
+        }
+        const data = await resp.json();
+        console.log('✅ Fetched resolved markets:', data);
+        setResolvedMarkets(data.markets || []);
+      } catch (error) {
+        console.error('Error fetching resolved markets:', error);
+        setResolvedMarkets([]);
+      }
+    };
+    fetchResolvedMarkets();
   }, [sidebarTab]);
 
   const handleBack = () => {
@@ -1349,6 +1371,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
             { key: "predictions" as SidebarTab, label: "Predictions" },
             { key: "markets" as SidebarTab, label: "Markets" },
             { key: "mybets" as SidebarTab, label: "All Bets" },
+            { key: "winnings" as SidebarTab, label: "🏆 Winners" },
           ]).map((t) => (
             <button
               key={t.key}
@@ -1503,6 +1526,140 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                   </div>
                   );
                 })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab Content: Winners/Resolved Markets */}
+        {sidebarTab === "winnings" && (
+          <div>
+            {resolvedMarkets.length === 0 ? (
+              <div style={{ color: "#6c757d", fontSize: "14px", textAlign: "center", padding: "20px" }}>
+                No resolved markets yet
+              </div>
+            ) : (
+              <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+                {resolvedMarkets.map((market) => (
+                  <div
+                    key={market.id}
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: "10px",
+                      padding: "16px",
+                      marginBottom: "12px",
+                      border: "2px solid #e9ecef",
+                    }}
+                  >
+                    {/* Market Header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                      <span style={{ fontWeight: 700, fontSize: "15px", color: "#1a1a1a" }}>
+                        Route {market.route} · Stop {market.stop_tag}
+                      </span>
+                      <span style={{
+                        fontSize: "11px",
+                        padding: "3px 10px",
+                        borderRadius: "6px",
+                        fontWeight: 600,
+                        background: "#e8f5e9",
+                        color: "#2e7d32",
+                      }}>
+                        ✅ RESOLVED
+                      </span>
+                    </div>
+
+                    {/* Resolution Info */}
+                    {market.resolution && (
+                      <div style={{ fontSize: "13px", color: "#666", marginBottom: "10px", background: "#f8f9fa", padding: "8px", borderRadius: "6px" }}>
+                        <div><strong>Actual Arrival:</strong> {market.resolution.actual_arrival_seconds}s</div>
+                        <div><strong>Resolved:</strong> {new Date(market.resolution.resolved_at).toLocaleString()}</div>
+                        <div><strong>Winners:</strong> {market.resolution.winner_count} / {market.stats?.totalBets || 0} bets</div>
+                      </div>
+                    )}
+
+                    {/* Top Winners (Podium) */}
+                    {market.topWinners && market.topWinners.length > 0 && (
+                      <div style={{ marginTop: "12px" }}>
+                        <div style={{ fontSize: "13px", fontWeight: 600, marginBottom: "8px", color: "#1a1a1a" }}>
+                          🏆 Top Winners:
+                        </div>
+                        {market.topWinners.map((winner: any, index: number) => {
+                          const isMyWin = winner.wallet_address === walletAddress;
+                          const profit = Number(winner.payout_lamports) - Number(winner.amount_lamports);
+                          const profitPercent = ((profit / Number(winner.amount_lamports)) * 100).toFixed(1);
+
+                          return (
+                            <div
+                              key={winner.id}
+                              style={{
+                                background: isMyWin ? "#f0f9ff" : "#fafafa",
+                                border: isMyWin ? "2px solid #0088CE" : "1px solid #e9ecef",
+                                borderRadius: "8px",
+                                padding: "10px",
+                                marginBottom: "6px",
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                              }}
+                            >
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                                  <span style={{ fontSize: "16px" }}>
+                                    {index === 0 ? "🥇" : index === 1 ? "🥈" : "🥉"}
+                                  </span>
+                                  <span style={{
+                                    fontFamily: "monospace",
+                                    fontSize: "12px",
+                                    background: isMyWin ? "#0088CE" : "#e0e0e0",
+                                    color: isMyWin ? "#fff" : "#666",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                  }}>
+                                    {winner.wallet_address.slice(0, 6)}...{winner.wallet_address.slice(-4)}
+                                    {isMyWin && " (You!)"}
+                                  </span>
+                                </div>
+                                <div style={{ fontSize: "12px", color: "#666" }}>
+                                  Predicted: {winner.predicted_arrival_seconds}s · Error: {winner.error_seconds}s
+                                </div>
+                                <div style={{ fontSize: "12px", color: "#666" }}>
+                                  Accuracy: {winner.accuracy_score?.toFixed(4)}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: "right" }}>
+                                <div style={{ fontSize: "15px", fontWeight: 700, color: "#2e7d32" }}>
+                                  {(winner.payout_lamports / LAMPORTS_PER_SOL).toFixed(4)} SOL
+                                </div>
+                                <div style={{
+                                  fontSize: "11px",
+                                  color: profit > 0 ? "#2e7d32" : "#c62828",
+                                  fontWeight: 600,
+                                }}>
+                                  {profit > 0 ? "+" : ""}{profitPercent}% profit
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Market Stats */}
+                    <div style={{
+                      marginTop: "12px",
+                      paddingTop: "10px",
+                      borderTop: "1px solid #e9ecef",
+                      display: "grid",
+                      gridTemplateColumns: "1fr 1fr",
+                      gap: "8px",
+                      fontSize: "11px",
+                      color: "#666",
+                    }}>
+                      <div>Total Pool: {(market.stats?.totalWagered / LAMPORTS_PER_SOL).toFixed(4)} SOL</div>
+                      <div>Distributed: {(market.stats?.totalPaidOut / LAMPORTS_PER_SOL).toFixed(4)} SOL</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>

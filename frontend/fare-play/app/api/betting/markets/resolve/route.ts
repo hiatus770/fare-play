@@ -47,8 +47,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get all bets
-    const bets = await getBetsForMarket(marketId);
+    // Get all bets with user vault addresses
+    const { supabaseAdmin } = await import('@/lib/supabase-admin');
+    const { data: bets, error: betsError } = await supabaseAdmin
+      .from('bets')
+      .select(`
+        *,
+        users!inner (
+          vault_address
+        )
+      `)
+      .eq('market_id', marketId);
+
+    if (betsError) throw betsError;
 
     if (bets.length === 0) {
       // No bets, just mark as resolved
@@ -66,10 +77,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Calculate proportional payouts
-    const payouts = calculatePayouts(bets, actualArrivalSeconds, market.total_pool_lamports);
+    // Convert total_pool_lamports from string (Postgres BIGINT) to BigInt
+    const totalPoolBigInt = BigInt(market.total_pool_lamports || 0);
+    const payouts = calculatePayouts(bets, actualArrivalSeconds, totalPoolBigInt);
 
     // Build distribute_payouts instruction
-    const marketIdString = `${market.route}-${market.stop_tag}-${market.vehicle_id}-${new Date(market.created_at).getTime()}`;
+    const marketIdString = market.market_id_string;
+
+    if (!marketIdString) {
+      return NextResponse.json(
+        { error: 'Market missing market_id_string' },
+        { status: 500 }
+      );
+    }
 
     const [marketVaultPda] = await getProgramDerivedAddress({
       programAddress: VAULT_PROGRAM_ADDRESS,
@@ -189,13 +209,13 @@ function calculatePayouts(
   totalPool: bigint
 ): PayoutCalculation[] {
   // Calculate error and accuracy score for each bet
-  const betsWithScores = bets.map(bet => {
+  const betsWithScores = bets.map((bet: any) => {
     const error = Math.abs(bet.predicted_arrival_seconds - actualArrival);
     const accuracyScore = 1 / (1 + error);
 
     return {
       betId: bet.id,
-      userVaultAddress: bet.wallet_address, // TODO: Should store vault address in bet
+      userVaultAddress: bet.users?.vault_address || bet.vault_address,
       prediction: bet.predicted_arrival_seconds,
       error,
       accuracyScore,
@@ -207,7 +227,12 @@ function calculatePayouts(
 
   // Calculate proportional payout for each bet
   const payouts: PayoutCalculation[] = betsWithScores.map(bet => {
-    const payoutAmount = (BigInt(Math.floor((bet.accuracyScore / totalAccuracyScore) * Number(totalPool))));
+    // Calculate proportion as a precise number (0 to 1)
+    const proportion = bet.accuracyScore / totalAccuracyScore;
+
+    // Convert totalPool to Number for calculation, then back to BigInt
+    // This is safe because we're multiplying by a fraction (≤1)
+    const payoutAmount = BigInt(Math.floor(proportion * Number(totalPool)));
 
     return {
       ...bet,
@@ -219,12 +244,12 @@ function calculatePayouts(
   const distributedTotal = payouts.reduce((sum, p) => sum + p.payout, BigInt(0));
   const remaining = totalPool - distributedTotal;
 
-  if (remaining > 0 && payouts.length > 0) {
+  if (remaining > BigInt(0) && payouts.length > 0) {
     // Find bet with highest accuracy score
     const bestBet = payouts.reduce((best, current) =>
       current.accuracyScore > best.accuracyScore ? current : best
     );
-    bestBet.payout += remaining;
+    bestBet.payout = bestBet.payout + remaining;
   }
 
   return payouts;
