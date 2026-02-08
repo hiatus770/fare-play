@@ -235,9 +235,25 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
 
   const fetchPredictions = async (route: string, stop: string) => {
     setLoading(true);
+    setError("");
     try {
       const response = await fetch(`${API_BASE}/stop/${route}/${stop}`);
-      if (!response.ok) throw new Error("Failed to fetch predictions");
+
+      if (response.status === 404) {
+        // No predictions available for this stop
+        const data = await response.json();
+        setPredictions([]);
+        setFrozenPredictions([]);
+        setStopName(data.stop_name || selectedStop?.title || "");
+        setRouteName(data.route_name || selectedRoute?.name || "");
+        setError("");
+        setLoading(false);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch predictions");
+      }
 
       const data = await response.json();
       // Sort predictions by ETA (soonest first)
@@ -250,7 +266,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       setRouteName(data.route_name || "");
       setError("");
     } catch (err) {
-      setError("Failed to load predictions. Make sure the backend is running.");
+      setError("Failed to connect to backend. Make sure it's running on port 5000.");
       setPredictions([]);
       setFrozenPredictions([]);
     } finally {
@@ -342,22 +358,22 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
         position: "fixed",
         top: 0,
         left: 0,
-        width: "400px",
+        width: "500px",
         height: "100vh",
-        background: "linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%)",
+        background: "rgba(40, 40, 40, 0.92)",
         overflowY: "auto",
         zIndex: 10,
-        padding: "24px",
+        padding: "48px 32px 32px 32px",
         boxSizing: "border-box",
-        boxShadow: "4px 0 24px rgba(0,0,0,0.6)",
+        boxShadow: "2px 0 24px rgba(0,0,0,0.25)",
       }}
     >
       {/* Header */}
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: "16px" }}>
         <h1
           style={{
             color: "#fff",
-            fontSize: "28px",
+            fontSize: "32px",
             fontWeight: "700",
             margin: "0 0 8px 0",
             letterSpacing: "-0.5px",
@@ -365,7 +381,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
         >
           FarePlay
         </h1>
-        <p style={{ color: "#666", fontSize: "13px", margin: "0" }}>
+        <p style={{ color: "#aaa", fontSize: "15px", margin: "0" }}>
           Predict TTC arrivals
         </p>
       </div>
@@ -375,152 +391,140 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
         <button
           onClick={handleBack}
           style={{
-            width: "100%",
-            padding: "10px 14px",
-            background: "#1a1a1a",
-            border: "1px solid #333",
-            borderRadius: "8px",
-            color: "#888",
+            padding: "8px 0",
+            background: "none",
+            border: "none",
+            color: "#4ECDC4",
             cursor: "pointer",
-            fontSize: "13px",
-            marginBottom: "16px",
+            fontSize: "14px",
+            marginBottom: "8px",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
+            gap: "6px",
           }}
         >
-          <span style={{ fontSize: "16px" }}>←</span>
+          <span style={{ fontSize: "14px" }}>←</span>
           {selectedStop ? "Back to stops" : "Back to routes"}
         </button>
       )}
 
       {/* Nearby Stops Section */}
       {!selectedRoute && nearbyStops.length > 0 && (
-        <div style={{ marginBottom: "24px" }}>
-          <div style={{ color: "#FF6B6B", fontSize: "11px", fontWeight: "600", marginBottom: "12px", letterSpacing: "1px" }}>
-            NEARBY STOPS
-          </div>
-          <div style={{ fontSize: "11px", color: "#555", marginBottom: "12px" }}>
-            Based on map view
-          </div>
-          {nearbyStops.map((stop) => (
-            <button
-              key={`${stop.routeTag}-${stop.tag}`}
-              onClick={() => handleNearbyStopSelect(stop)}
-              style={{
-                width: "100%",
-                padding: "12px 14px",
-                marginBottom: "6px",
-                background: "#1a1a1a",
-                border: "1px solid #2a2a2a",
-                borderRadius: "10px",
-                color: "#fff",
-                cursor: "pointer",
-                fontSize: "13px",
-                textAlign: "left",
-                transition: "border-color 0.15s",
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.borderColor = "#FF6B6B";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.borderColor = "#2a2a2a";
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontWeight: "500" }}>{stop.title}</div>
-                  <div style={{ fontSize: "11px", color: "#666", marginTop: "2px" }}>
-                    Route {stop.routeTag} · {(stop.distance * 1000).toFixed(0)}m away
-                  </div>
+        <div style={{
+          width: "100%",
+          marginTop: "24px",
+          background: "#232323",
+          borderRadius: "8px",
+          padding: "16px",
+          color: "#fff",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+        }}>
+          <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Nearby Stops</div>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {nearbyStops.map((stop, idx) => (
+              <li
+                key={`${stop.routeTag}-${stop.tag}`}
+                onClick={() => handleNearbyStopSelect(stop)}
+                style={{
+                  padding: "12px 0",
+                  borderBottom: idx < nearbyStops.length - 1 ? "1px solid #333" : "none",
+                  cursor: "pointer",
+                  transition: "color 0.15s",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = getRouteColor(stop.routeTag);
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "#fff";
+                }}
+              >
+                <div style={{ fontSize: "15px", fontWeight: "500", marginBottom: "4px" }}>
+                  {stop.title}
                 </div>
-                <div
-                  style={{
-                    width: "28px",
-                    height: "28px",
-                    backgroundColor: getRouteColor(stop.routeTag),
-                    borderRadius: "6px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: "700",
-                    fontSize: "10px",
-                  }}
-                >
-                  {stop.routeTag}
+                <div style={{ fontSize: "13px", color: "#888" }}>
+                  Route {stop.routeTag} • {(stop.distance * 1000).toFixed(0)}m away
                 </div>
-              </div>
-            </button>
-          ))}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
-      {loadingNearby && !selectedRoute && (
-        <div style={{ color: "#666", fontSize: "13px", padding: "12px", textAlign: "center", marginBottom: "20px" }}>
+      {loadingNearby && !selectedRoute && nearbyStops.length === 0 && (
+        <div style={{
+          width: "100%",
+          marginTop: "24px",
+          background: "#232323",
+          borderRadius: "8px",
+          padding: "16px",
+          color: "#888",
+          textAlign: "center",
+        }}>
           Loading nearby stops...
         </div>
       )}
 
-      {/* Step 1: Select Route */}
+      {/* Routes Section */}
       {!selectedRoute && (
-        <div>
-          <div style={{ color: "#4ECDC4", fontSize: "11px", fontWeight: "600", marginBottom: "12px", letterSpacing: "1px" }}>
-            OR SELECT ROUTE
-          </div>
+        <div style={{
+          width: "100%",
+          marginTop: "24px",
+          background: "#232323",
+          borderRadius: "8px",
+          padding: "16px",
+          color: "#fff",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+        }}>
+          <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Streetcar Routes</div>
           {routes.length === 0 ? (
-            <div style={{ color: "#666", fontSize: "13px", padding: "20px", textAlign: "center" }}>
+            <div style={{ color: "#888", fontSize: "14px", padding: "12px 0" }}>
               Loading routes...
             </div>
           ) : (
-            routes.map((route) => (
-              <button
-                key={route.tag}
-                onClick={() => handleRouteSelect(route)}
-                style={{
-                  width: "100%",
-                  padding: "14px 16px",
-                  marginBottom: "8px",
-                  background: "#1a1a1a",
-                  border: "1px solid #2a2a2a",
-                  borderRadius: "10px",
-                  color: "#fff",
-                  cursor: "pointer",
-                  fontSize: "14px",
-                  transition: "all 0.15s",
-                  textAlign: "left",
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.borderColor = route.color;
-                  e.currentTarget.style.background = "#222";
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.borderColor = "#2a2a2a";
-                  e.currentTarget.style.background = "#1a1a1a";
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {routes.map((route, idx) => (
+                <li
+                  key={route.tag}
+                  onClick={() => handleRouteSelect(route)}
+                  style={{
+                    padding: "12px 0",
+                    borderBottom: idx < routes.length - 1 ? "1px solid #333" : "none",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    transition: "opacity 0.15s",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.opacity = "0.7";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.opacity = "1";
+                  }}
+                >
                   <div
                     style={{
-                      width: "36px",
-                      height: "36px",
+                      width: "32px",
+                      height: "32px",
                       backgroundColor: route.color,
-                      borderRadius: "8px",
+                      borderRadius: "6px",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       fontWeight: "700",
-                      fontSize: "12px",
+                      fontSize: "11px",
+                      flexShrink: 0,
                     }}
                   >
                     {route.tag}
                   </div>
                   <div>
-                    <div style={{ fontWeight: "600" }}>{route.name}</div>
-                    <div style={{ fontSize: "12px", color: "#666" }}>Streetcar</div>
+                    <div style={{ fontSize: "15px", fontWeight: "500" }}>{route.name}</div>
+                    <div style={{ fontSize: "13px", color: "#888" }}>Streetcar</div>
                   </div>
-                </div>
-              </button>
-            ))
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
@@ -529,101 +533,91 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       {selectedRoute && !selectedStop && (
         <div>
           <div style={{
-            background: "#1a1a1a",
-            border: "1px solid #2a2a2a",
-            borderRadius: "10px",
-            padding: "14px",
+            background: "#232323",
+            borderRadius: "8px",
+            padding: "16px",
+            marginTop: "24px",
             marginBottom: "16px",
           }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
               <div
                 style={{
-                  width: "36px",
-                  height: "36px",
+                  width: "32px",
+                  height: "32px",
                   backgroundColor: selectedRoute.color,
-                  borderRadius: "8px",
+                  borderRadius: "6px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontWeight: "700",
-                  fontSize: "12px",
+                  fontSize: "11px",
                 }}
               >
                 {selectedRoute.tag}
               </div>
               <div>
-                <div style={{ color: "#fff", fontWeight: "600" }}>{selectedRoute.name}</div>
-                <div style={{ color: "#666", fontSize: "12px" }}>{stops.length} stops</div>
+                <div style={{ color: "#fff", fontWeight: "600", fontSize: "16px" }}>{selectedRoute.name}</div>
+                <div style={{ color: "#888", fontSize: "13px" }}>{stops.length} stops</div>
               </div>
             </div>
+
+            <input
+              type="text"
+              placeholder="Search stops..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "12px 14px",
+                background: "#2a2a2a",
+                border: "1.5px solid #444",
+                borderRadius: "8px",
+                color: "#fff",
+                fontSize: "14px",
+                boxSizing: "border-box",
+                outline: "none",
+              }}
+            />
           </div>
 
-          <div style={{ color: "#4ECDC4", fontSize: "11px", fontWeight: "600", marginBottom: "12px", letterSpacing: "1px" }}>
-            SELECT STOP
-          </div>
-
-          <input
-            type="text"
-            placeholder="Search stops..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "12px 14px",
-              background: "#1a1a1a",
-              border: "1px solid #2a2a2a",
-              borderRadius: "8px",
-              color: "#fff",
-              marginBottom: "12px",
-              fontSize: "14px",
-              boxSizing: "border-box",
-            }}
-          />
-
-          <div
-            style={{
-              maxHeight: "calc(100vh - 340px)",
-              overflowY: "auto",
-            }}
-          >
+          <div style={{
+            background: "#232323",
+            borderRadius: "8px",
+            padding: "16px",
+            maxHeight: "calc(100vh - 380px)",
+            overflowY: "auto",
+          }}>
             {loadingStops ? (
-              <div style={{ color: "#666", fontSize: "13px", padding: "20px", textAlign: "center" }}>
+              <div style={{ color: "#888", fontSize: "14px", padding: "12px 0", textAlign: "center" }}>
                 Loading stops...
               </div>
             ) : filteredStops.length === 0 ? (
-              <div style={{ color: "#666", fontSize: "13px", padding: "20px", textAlign: "center" }}>
+              <div style={{ color: "#888", fontSize: "14px", padding: "12px 0", textAlign: "center" }}>
                 No stops found
               </div>
             ) : (
-              filteredStops.map((stop) => (
-                <button
-                  key={stop.tag}
-                  onClick={() => handleStopSelect(stop)}
-                  style={{
-                    width: "100%",
-                    padding: "12px 14px",
-                    marginBottom: "6px",
-                    background: "#1a1a1a",
-                    border: "1px solid #2a2a2a",
-                    borderRadius: "8px",
-                    color: "#fff",
-                    cursor: "pointer",
-                    fontSize: "13px",
-                    textAlign: "left",
-                    transition: "all 0.15s",
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.borderColor = "#4ECDC4";
-                    e.currentTarget.style.background = "#222";
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.borderColor = "#2a2a2a";
-                    e.currentTarget.style.background = "#1a1a1a";
-                  }}
-                >
-                  <div style={{ fontWeight: "500" }}>{stop.title}</div>
-                </button>
-              ))
+              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {filteredStops.map((stop, idx) => (
+                  <li
+                    key={stop.tag}
+                    onClick={() => handleStopSelect(stop)}
+                    style={{
+                      padding: "12px 0",
+                      borderBottom: idx < filteredStops.length - 1 ? "1px solid #333" : "none",
+                      cursor: "pointer",
+                      transition: "color 0.15s",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = selectedRoute.color;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = "#fff";
+                    }}
+                  >
+                    <div style={{ fontSize: "15px", fontWeight: "500" }}>{stop.title}</div>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>
@@ -635,34 +629,34 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           {/* Selected Stop Info */}
           <div
             style={{
-              background: "linear-gradient(135deg, rgba(78, 205, 196, 0.15) 0%, rgba(78, 205, 196, 0.05) 100%)",
-              border: "1px solid rgba(78, 205, 196, 0.3)",
-              borderRadius: "12px",
+              background: "#232323",
+              borderRadius: "8px",
               padding: "16px",
-              marginBottom: "20px",
+              marginTop: "24px",
+              marginBottom: "16px",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <div
                 style={{
-                  width: "36px",
-                  height: "36px",
+                  width: "32px",
+                  height: "32px",
                   backgroundColor: selectedRoute.color,
-                  borderRadius: "8px",
+                  borderRadius: "6px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   fontWeight: "700",
-                  fontSize: "12px",
+                  fontSize: "11px",
                 }}
               >
                 {selectedRoute.tag}
               </div>
               <div>
-                <div style={{ color: "#fff", fontSize: "15px", fontWeight: "600" }}>
+                <div style={{ color: "#fff", fontSize: "16px", fontWeight: "600" }}>
                   {stopName || selectedStop.title}
                 </div>
-                <div style={{ color: "#4ECDC4", fontSize: "12px" }}>
+                <div style={{ color: "#888", fontSize: "13px" }}>
                   {routeName || selectedRoute.name}
                 </div>
               </div>
@@ -670,21 +664,27 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           </div>
 
           {loading && (
-            <div style={{ color: "#666", textAlign: "center", padding: "24px" }}>
-              Loading predictions...
+            <div style={{
+              background: "#232323",
+              borderRadius: "8px",
+              padding: "16px",
+              marginBottom: "16px",
+            }}>
+              <div style={{ color: "#888", textAlign: "center", fontSize: "14px" }}>
+                Loading predictions...
+              </div>
             </div>
           )}
 
           {error && (
             <div
               style={{
-                background: "rgba(255, 107, 107, 0.1)",
-                border: "1px solid rgba(255, 107, 107, 0.3)",
+                background: "#232323",
                 color: "#FF6B6B",
-                padding: "12px",
+                padding: "12px 16px",
                 borderRadius: "8px",
                 marginBottom: "16px",
-                fontSize: "13px",
+                fontSize: "14px",
               }}
             >
               {error}
@@ -694,14 +694,13 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           {success && (
             <div
               style={{
-                background: "rgba(78, 205, 196, 0.1)",
-                border: "1px solid rgba(78, 205, 196, 0.3)",
+                background: "#232323",
                 color: "#4ECDC4",
-                padding: "12px",
+                padding: "12px 16px",
                 borderRadius: "8px",
                 marginBottom: "16px",
-                fontSize: "13px",
-                fontWeight: "600",
+                fontSize: "14px",
+                fontWeight: "500",
               }}
             >
               {success}
@@ -710,89 +709,106 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
 
           {/* Current Vehicles */}
           {!loading && predictions.length > 0 && (
-            <div style={{ marginBottom: "20px" }}>
-              <div style={{ color: "#4ECDC4", fontSize: "11px", fontWeight: "600", marginBottom: "12px", letterSpacing: "1px" }}>
-                ARRIVING VEHICLES
-              </div>
-
-              {predictions.map((pred) => (
-                <button
-                  key={pred.vehicle_id}
-                  onClick={() => handleVehicleSelect(pred.vehicle_id)}
-                  style={{
-                    width: "100%",
-                    padding: "14px 16px",
-                    marginBottom: "8px",
-                    background: selectedVehicle === pred.vehicle_id
-                      ? "rgba(78, 205, 196, 0.15)"
-                      : "#1a1a1a",
-                    border: selectedVehicle === pred.vehicle_id
-                      ? "1px solid rgba(78, 205, 196, 0.5)"
-                      : "1px solid #2a2a2a",
-                    borderRadius: "10px",
-                    color: "#fff",
-                    cursor: "pointer",
-                    fontSize: "14px",
-                    transition: "all 0.15s",
-                    textAlign: "left",
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontWeight: "600" }}>Vehicle {pred.vehicle_id}</div>
-                      <div style={{ fontSize: "12px", color: "#666", marginTop: "2px" }}>
-                        {pred.direction}
+            <div style={{
+              background: "#232323",
+              borderRadius: "8px",
+              padding: "16px",
+              marginBottom: "16px",
+            }}>
+              <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Arriving Vehicles</div>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {predictions.map((pred, idx) => (
+                  <li
+                    key={pred.vehicle_id}
+                    onClick={() => handleVehicleSelect(pred.vehicle_id)}
+                    style={{
+                      padding: "12px 0",
+                      borderBottom: idx < predictions.length - 1 ? "1px solid #333" : "none",
+                      cursor: "pointer",
+                      backgroundColor: selectedVehicle === pred.vehicle_id ? "rgba(78, 205, 196, 0.1)" : "transparent",
+                      transition: "background-color 0.15s",
+                      marginLeft: "-16px",
+                      marginRight: "-16px",
+                      paddingLeft: "16px",
+                      paddingRight: "16px",
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedVehicle !== pred.vehicle_id) {
+                        e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.05)";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedVehicle !== pred.vehicle_id) {
+                        e.currentTarget.style.backgroundColor = "transparent";
+                      }
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: "15px", fontWeight: "500" }}>Vehicle {pred.vehicle_id}</div>
+                        <div style={{ fontSize: "13px", color: "#888", marginTop: "2px" }}>
+                          {pred.direction}
+                        </div>
+                      </div>
+                      <div style={{
+                        color: selectedRoute?.color || "#4ECDC4",
+                        fontWeight: "700",
+                        fontSize: "18px",
+                      }}>
+                        {pred.current_eta_display}
                       </div>
                     </div>
-                    <div style={{
-                      color: "#4ECDC4",
-                      fontWeight: "700",
-                      fontSize: "18px",
-                    }}>
-                      {pred.current_eta_display}
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
           {!loading && predictions.length === 0 && !error && (
-            <div style={{ color: "#666", textAlign: "center", padding: "24px", fontSize: "13px" }}>
-              No vehicles currently approaching this stop
+            <div style={{
+              background: "#232323",
+              borderRadius: "8px",
+              padding: "16px",
+              marginBottom: "16px",
+            }}>
+              <div style={{ color: "#888", textAlign: "center", fontSize: "14px" }}>
+                No vehicles currently approaching
+              </div>
             </div>
           )}
 
-          {/* Frozen Predictions History */}
-          {selectedVehicle && frozenPredictions.length > 0 && (
-            <div style={{ marginBottom: "20px" }}>
-              <div style={{ color: "#FF6B6B", fontSize: "11px", fontWeight: "600", marginBottom: "12px", letterSpacing: "1px" }}>
-                PREDICTION ACCURACY HISTORY
-              </div>
+          {/* Frozen Predictions History & Betting */}
+          {selectedVehicle && (
+            <div style={{
+              background: "#232323",
+              borderRadius: "8px",
+              padding: "16px",
+              marginBottom: "16px",
+            }}>
+              {frozenPredictions.filter((fp) => fp.vehicle_id === selectedVehicle).length > 0 && (
+                <>
+                  <div style={{ fontWeight: 600, fontSize: "18px", marginBottom: "12px" }}>Prediction History</div>
 
-              {frozenPredictions
-                .filter((fp) => fp.vehicle_id === selectedVehicle)
-                .slice(0, 3)
-                .map((fp, idx) => (
+                  {frozenPredictions
+                    .filter((fp) => fp.vehicle_id === selectedVehicle)
+                    .slice(0, 3)
+                    .map((fp, idx) => (
                   <div
                     key={idx}
                     style={{
-                      background: "#1a1a1a",
-                      border: "1px solid #2a2a2a",
-                      borderRadius: "10px",
-                      padding: "14px",
-                      marginBottom: "10px",
+                      padding: "12px 0",
+                      borderBottom: idx < 2 && frozenPredictions.filter(f => f.vehicle_id === selectedVehicle).length > idx + 1 ? "1px solid #333" : "none",
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
                       <div>
-                        <div style={{ color: "#666", fontSize: "10px", letterSpacing: "0.5px" }}>PREDICTED</div>
+                        <div style={{ color: "#888", fontSize: "12px" }}>Predicted</div>
                         <div style={{ color: "#fff", fontSize: "16px", fontWeight: "600" }}>
                           {fp.frozen_prediction_display}
                         </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
-                        <div style={{ color: "#666", fontSize: "10px", letterSpacing: "0.5px" }}>ACTUAL</div>
+                        <div style={{ color: "#888", fontSize: "12px" }}>Actual</div>
                         <div
                           style={{
                             color: fp.status === "EARLY" ? "#4ECDC4" : "#FF6B6B",
@@ -806,38 +822,34 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                     </div>
                     <div
                       style={{
-                        background: fp.status === "EARLY"
-                          ? "rgba(78, 205, 196, 0.1)"
-                          : "rgba(255, 107, 107, 0.1)",
-                        borderRadius: "6px",
-                        padding: "8px 10px",
                         color: fp.status === "EARLY" ? "#4ECDC4" : "#FF6B6B",
-                        fontSize: "12px",
-                        fontWeight: "600",
+                        fontSize: "13px",
+                        fontWeight: "500",
                       }}
                     >
                       {fp.status === "EARLY"
-                        ? `Arrived ${Math.abs(parseInt(fp.error_display))}s early`
+                        ? `${Math.abs(parseInt(fp.error_display))}s early`
                         : fp.status === "LATE"
-                        ? `Arrived ${Math.abs(parseInt(fp.error_display))}s late`
+                        ? `${Math.abs(parseInt(fp.error_display))}s late`
                         : "On time"}
                     </div>
                   </div>
                 ))}
+                </>
+              )}
 
-              {/* Prediction Input */}
-              <div style={{ marginTop: "16px" }}>
+              {/* Prediction Input - Always show when vehicle selected */}
+              <div style={{ marginTop: frozenPredictions.filter((fp) => fp.vehicle_id === selectedVehicle).length > 0 ? "16px" : "0" }}>
                 <label
                   style={{
-                    color: "#666",
-                    fontSize: "11px",
-                    fontWeight: "600",
+                    color: "#888",
+                    fontSize: "13px",
+                    fontWeight: "500",
                     display: "block",
                     marginBottom: "8px",
-                    letterSpacing: "0.5px",
                   }}
                 >
-                  YOUR PREDICTION (seconds until arrival)
+                  Your Prediction (seconds)
                 </label>
                 <input
                   type="number"
@@ -847,12 +859,13 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                   style={{
                     width: "100%",
                     padding: "12px 14px",
-                    background: "#0d0d0d",
-                    border: "1px solid #2a2a2a",
+                    background: "#2a2a2a",
+                    border: "1.5px solid #444",
                     borderRadius: "8px",
                     color: "#fff",
-                    fontSize: "14px",
+                    fontSize: "15px",
                     boxSizing: "border-box",
+                    outline: "none",
                   }}
                 />
               </div>
@@ -861,18 +874,22 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
 
           {/* Bet Amount */}
           {selectedVehicle && selectedTime && (
-            <div style={{ marginBottom: "20px" }}>
+            <div style={{
+              background: "#232323",
+              borderRadius: "8px",
+              padding: "16px",
+              marginBottom: "16px",
+            }}>
               <label
                 style={{
-                  color: "#666",
-                  fontSize: "11px",
-                  fontWeight: "600",
+                  color: "#888",
+                  fontSize: "13px",
+                  fontWeight: "500",
                   display: "block",
                   marginBottom: "8px",
-                  letterSpacing: "0.5px",
                 }}
               >
-                BET AMOUNT (SOL)
+                Bet Amount (SOL)
               </label>
               <input
                 type="number"
@@ -883,13 +900,14 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                 style={{
                   width: "100%",
                   padding: "12px 14px",
-                  background: "#0d0d0d",
-                  border: "1px solid #2a2a2a",
+                  background: "#2a2a2a",
+                  border: "1.5px solid #444",
                   borderRadius: "8px",
                   color: "#fff",
-                  fontSize: "14px",
+                  fontSize: "15px",
                   boxSizing: "border-box",
                   marginBottom: "12px",
+                  outline: "none",
                 }}
               />
 
@@ -899,51 +917,23 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                 style={{
                   width: "100%",
                   padding: "14px",
-                  background: "linear-gradient(135deg, #4ECDC4 0%, #44B8B0 100%)",
+                  background: selectedRoute?.color || "#4ECDC4",
                   color: "#000",
                   border: "none",
-                  borderRadius: "10px",
-                  fontSize: "14px",
+                  borderRadius: "8px",
+                  fontSize: "15px",
                   fontWeight: "700",
                   cursor: loading ? "not-allowed" : "pointer",
                   opacity: loading ? 0.6 : 1,
-                  letterSpacing: "0.5px",
                 }}
               >
-                {loading ? "PLACING BET..." : "PLACE BET"}
+                {loading ? "Placing bet..." : "Place Bet"}
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* Footer */}
-      <div
-        style={{
-          marginTop: "auto",
-          paddingTop: "20px",
-          borderTop: "1px solid #1a1a1a",
-        }}
-      >
-        <div
-          style={{
-            background: "#0d0d0d",
-            borderRadius: "10px",
-            padding: "14px",
-            color: "#555",
-            fontSize: "11px",
-            lineHeight: "1.6",
-          }}
-        >
-          <strong style={{ color: "#666" }}>How it works:</strong>
-          <div style={{ marginTop: "8px" }}>
-            1. Select a streetcar route<br />
-            2. Pick a stop to monitor<br />
-            3. View live predictions and accuracy<br />
-            4. Make your prediction and bet
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

@@ -139,6 +139,8 @@ const Map = () => {
         markersRef.current.forEach(marker => marker.remove());
         markersRef.current = [];
 
+        if (stops.length === 0) return;
+
         // Add new markers for stops
         stops.forEach(stop => {
             const el = document.createElement('div');
@@ -180,16 +182,23 @@ const Map = () => {
 
             markersRef.current.push(marker);
         });
-    }, [stops, selectedStop, mapLoaded]);
+
+        // Fit bounds to show all stops after markers are added
+        if (selectedRoute && !selectedStop) {
+            const bounds = new mapboxgl.LngLatBounds();
+            stops.forEach(s => bounds.extend([s.lon, s.lat]));
+            map.current.fitBounds(bounds, { padding: 100, maxZoom: 14, duration: 1000 });
+        }
+    }, [stops, selectedStop, mapLoaded, selectedRoute]);
 
     // Handle stop selection from sidebar
-    const handleStopSelect = useCallback((stop: Stop | null, routeTag: string | null) => {
+    const handleStopSelect = useCallback(async (stop: Stop | null, routeTag: string | null) => {
         setSelectedStop(stop);
         setSelectedRoute(routeTag);
 
         if (routeTag && !stop) {
             // Route selected, load its stops
-            loadStopsForRoute(routeTag);
+            await loadStopsForRoute(routeTag);
         } else if (!routeTag) {
             // Back to routes, clear stops
             setStops([]);
