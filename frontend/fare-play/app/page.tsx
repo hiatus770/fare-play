@@ -2,6 +2,7 @@
 import Map from "./components/Map";
 import BusPredictionMarket from './components/bus-prediction-market';
 import { VaultCard } from './components/vault-card';
+import SolanaConnectionTest from "./components/solana-connection-test";
 import AuthStatus from './components/auth-status';
 
 export default function Home() {
