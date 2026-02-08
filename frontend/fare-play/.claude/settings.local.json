@@ -23,7 +23,8 @@
       "Bash(anchor deploy:*)",
       "Bash(solana balance:*)",
       "Bash(solana airdrop:*)",
-      "Bash(solana program deploy:*)"
+      "Bash(solana program deploy:*)",
+      "Bash(/home/ashle/fare-play/frontend/fare-play/supabase/migrations/add_market_id_string.sql << 'EOF'\n-- Add market_id_string column to store the exact string used for PDA derivation\nALTER TABLE markets ADD COLUMN IF NOT EXISTS market_id_string TEXT;\n\n-- Create index for faster lookups\nCREATE INDEX IF NOT EXISTS idx_markets_id_string ON markets\\(market_id_string\\);\nEOF)"
     ]
   }
 }

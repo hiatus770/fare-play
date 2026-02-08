@@ -594,28 +594,30 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
     return () => clearInterval(interval);
   }, [selectedVehicle, selectedRoute, selectedStop, predictions]);
 
-  // Fetch my bets when tab switches
+  // Fetch all bets when tab switches
   useEffect(() => {
-    if (sidebarTab !== "mybets" || !walletAddress) return;
-    const fetchMyBets = async () => {
+    if (sidebarTab !== "mybets") return;
+    const fetchAllBets = async () => {
       try {
-        const allMarkets = [...markets, ...resolvedMarkets];
-        const bets: any[] = [];
-        for (const m of allMarkets) {
-          const resp = await fetch(`/api/markets/${m.id}`);
-          const data = await resp.json();
-          const myTrades = (data.trades ?? []).filter(
-            (t: any) => t.wallet === walletAddress
-          );
-          for (const t of myTrades) {
-            bets.push({ ...t, market: data.market });
-          }
+        console.log('🔍 Fetching ALL bets from all users');
+        // Fetch all bets from new betting API
+        const resp = await fetch(`/api/betting/bets/all`);
+        if (!resp.ok) {
+          console.error('Failed to fetch bets:', resp.statusText);
+          setMyBets([]);
+          return;
         }
-        setMyBets(bets);
-      } catch { /* silent */ }
+        const data = await resp.json();
+        console.log('✅ Fetched all bets:', data);
+        console.log('📊 Total bets:', data.bets?.length || 0);
+        setMyBets(data.bets || []);
+      } catch (error) {
+        console.error('Error fetching bets:', error);
+        setMyBets([]);
+      }
     };
-    fetchMyBets();
-  }, [sidebarTab, walletAddress, markets.length, resolvedMarkets.length]);
+    fetchAllBets();
+  }, [sidebarTab]);
 
   const handleBack = () => {
     if (selectedStop) {
@@ -1346,7 +1348,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           {([
             { key: "predictions" as SidebarTab, label: "Predictions" },
             { key: "markets" as SidebarTab, label: "Markets" },
-            { key: "mybets" as SidebarTab, label: "My Bets" },
+            { key: "mybets" as SidebarTab, label: "All Bets" },
           ]).map((t) => (
             <button
               key={t.key}
@@ -1422,67 +1424,85 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
           />
         )}
 
-        {/* Tab Content: My Bets */}
+        {/* Tab Content: All Bets */}
         {sidebarTab === "mybets" && (
           <div>
-            {!walletAddress ? (
+            {(() => {
+              console.log('🎯 Rendering All Bets tab:', { walletAddress, totalBets: myBets.length, myBets });
+              return null;
+            })()}
+            {myBets.length === 0 ? (
               <div style={{ color: "#6c757d", fontSize: "14px", textAlign: "center", padding: "20px" }}>
-                Connect wallet to see your bets
-              </div>
-            ) : myBets.length === 0 ? (
-              <div style={{ color: "#6c757d", fontSize: "14px", textAlign: "center", padding: "20px" }}>
-                No bets placed yet
+                No bets placed yet by anyone
               </div>
             ) : (
               <div style={{ maxHeight: "400px", overflowY: "auto" }}>
-                {myBets.map((bet) => (
+                {myBets.map((bet) => {
+                  const isMyBet = bet.wallet_address === walletAddress;
+                  const betWallet = bet.wallet_address || '';
+                  return (
                   <div
                     key={bet.id}
                     style={{
-                      background: "#ffffff",
+                      background: isMyBet ? "#f0f9ff" : "#ffffff",
                       borderRadius: "10px",
                       padding: "14px",
                       marginBottom: "8px",
-                      border: "1.5px solid #e9ecef",
+                      border: isMyBet ? "2px solid #0088CE" : "1.5px solid #e9ecef",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
                       <span style={{ fontWeight: 600, fontSize: "14px", color: "#1a1a1a" }}>
-                        Route {bet.market?.route_tag} &middot; Vehicle {bet.market?.vehicle_id}
+                        Bet ID: {bet.id.slice(0, 8)}...
                       </span>
                       <span style={{
                         fontSize: "11px",
                         padding: "2px 8px",
                         borderRadius: "6px",
                         fontWeight: 600,
-                        background: bet.outcome === "EARLY" ? "#e8f5e9" : bet.outcome === "ON_TIME" ? "#fff8e1" : "#ffebee",
-                        color: bet.outcome === "EARLY" ? "#2e7d32" : bet.outcome === "ON_TIME" ? "#f57f17" : "#c62828",
+                        background: "#e3f2fd",
+                        color: "#1976d2",
                       }}>
-                        {bet.outcome}
+                        Market: {bet.market_id.slice(0, 8)}...
                       </span>
                     </div>
-                    <div style={{ fontSize: "13px", color: "#6c757d" }}>
-                      {bet.shares.toFixed(2)} shares &middot; Cost: {(bet.cost_lamports / LAMPORTS_PER_SOL).toFixed(6)} SOL
+                    <div style={{ fontSize: "13px", color: "#6c757d", marginBottom: "4px" }}>
+                      Predicted: {bet.predicted_arrival_seconds}s &middot; Bet: {(bet.amount_lamports / LAMPORTS_PER_SOL).toFixed(4)} SOL
                     </div>
-                    {bet.market?.status === "resolved" && (
+                    <div style={{ fontSize: "13px", color: "#6c757d", marginBottom: "4px" }}>
+                      Tx: {bet.placement_signature?.slice(0, 8)}...
+                    </div>
+                    {bet.error_seconds !== null && bet.error_seconds !== undefined && (
+                      <div style={{ fontSize: "13px", color: "#6c757d", marginBottom: "4px" }}>
+                        Error: {bet.error_seconds}s &middot; Score: {bet.accuracy_score?.toFixed(4) || 'N/A'}
+                      </div>
+                    )}
+                    {bet.payout_lamports > 0 && (
                       <div style={{
                         fontSize: "13px",
                         marginTop: "6px",
-                        color: bet.market.resolved_outcome === bet.outcome ? "#2e7d32" : "#c62828",
+                        color: "#2e7d32",
                         fontWeight: 600,
                       }}>
-                        {bet.market.resolved_outcome === bet.outcome
-                          ? `Won! Payout: ${(bet.payout_lamports / LAMPORTS_PER_SOL).toFixed(6)} SOL`
-                          : `Lost — Resolved: ${bet.market.resolved_outcome}`}
+                        🎉 Won ${(bet.payout_lamports / LAMPORTS_PER_SOL).toFixed(4)} SOL!
                       </div>
                     )}
-                    {bet.market?.status === "open" && (
-                      <div style={{ fontSize: "13px", marginTop: "6px", color: "#0088CE", fontWeight: 500 }}>
-                        Pending...
-                      </div>
-                    )}
+                    <div style={{ fontSize: "11px", color: "#999", marginTop: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>{new Date(bet.created_at).toLocaleString()}</span>
+                      <span style={{
+                        fontFamily: "monospace",
+                        background: isMyBet ? "#0088CE" : "#f5f5f5",
+                        color: isMyBet ? "#fff" : "#666",
+                        padding: "2px 6px",
+                        borderRadius: "4px"
+                      }}>
+                        {betWallet.slice(0, 4)}...{betWallet.slice(-4)}
+                        {isMyBet && " (You)"}
+                      </span>
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

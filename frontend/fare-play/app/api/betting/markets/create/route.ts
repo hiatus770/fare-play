@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
       stopTag,
       vehicleId,
       marketVaultAddress: marketVaultPda,
+      marketIdString: marketId,  // Store the exact string used for PDA derivation
       freezeTime,
       predictedArrivalSeconds,
     });

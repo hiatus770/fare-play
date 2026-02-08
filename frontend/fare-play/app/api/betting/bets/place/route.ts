@@ -73,8 +73,15 @@ export async function POST(request: NextRequest) {
     const user = await getOrCreateUser(walletAddress, userVaultPda);
 
     // Build place_bet instruction
-    // Note: We'll use the market_id string that was used to derive the PDA
-    const marketIdString = `${market.route}-${market.stop_tag}-${market.vehicle_id}-${new Date(market.created_at).getTime()}`;
+    // Use the EXACT market_id_string that was stored when creating the market
+    const marketIdString = market.market_id_string;
+
+    if (!marketIdString) {
+      return NextResponse.json(
+        { error: 'Market missing market_id_string (old market format)' },
+        { status: 500 }
+      );
+    }
 
     // Manually construct the instruction (like VaultCard does)
     const { getPlaceBetInstructionDataEncoder } = await import('@/app/generated/vault');

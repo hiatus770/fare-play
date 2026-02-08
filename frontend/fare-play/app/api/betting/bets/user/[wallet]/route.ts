@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByWallet, getBetsForUser } from '@/lib/supabase/queries';
-import { supabaseAdmin } from '@/lib/supabase-admin';
+import { getUserByWallet } from '@/lib/supabase/queries';
+import { supabaseAdmin, isSupabaseConfigured } from '@/lib/supabase-admin';
 
 // GET /api/betting/bets/user/[wallet]
 // Get all bets for a specific user wallet address
@@ -17,6 +17,16 @@ export async function GET(
         { error: 'Wallet address is required' },
         { status: 400 }
       );
+    }
+
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({
+        user: null,
+        bets: [],
+        activeBets: [],
+        pendingResolutions: [],
+        history: [],
+      });
     }
 
     // Get user
@@ -36,7 +46,7 @@ export async function GET(
       .from('bets')
       .select(`
         *,
-        market:markets (
+        markets!inner (
           id,
           route,
           stop_tag,
@@ -55,13 +65,20 @@ export async function GET(
 
     if (error) throw error;
 
-    // Categorize bets
-    const activeBets = (bets || []).filter(b => b.market.status === 'ACTIVE');
-    const pendingResolutions = (bets || []).filter(b => b.market.status === 'FROZEN');
-    const history = (bets || []).filter(b => b.market.status === 'RESOLVED' || b.market.status === 'CANCELLED');
+    // Transform bets to have market as object (Supabase returns it as 'markets')
+    const transformedBets = (bets || []).map(bet => ({
+      ...bet,
+      market: (bet as any).markets || (bet as any).market || null
+    }));
+
+    // Categorize bets (handle cases where market might be null)
+    const activeBets = transformedBets.filter(b => b.market && b.market.status === 'ACTIVE');
+    const pendingResolutions = transformedBets.filter(b => b.market && b.market.status === 'FROZEN');
+    const history = transformedBets.filter(b => b.market && (b.market.status === 'RESOLVED' || b.market.status === 'CANCELLED'));
 
     return NextResponse.json({
       user,
+      bets: transformedBets,
       activeBets,
       pendingResolutions,
       history,

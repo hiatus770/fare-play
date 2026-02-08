@@ -56,6 +56,7 @@ export async function createMarket(params: {
   stopTag: string;
   vehicleId: string;
   marketVaultAddress: string;
+  marketIdString: string;
   freezeTime: Date;
   predictedArrivalSeconds: number;
 }): Promise<Market> {
@@ -66,6 +67,7 @@ export async function createMarket(params: {
       stop_tag: params.stopTag,
       vehicle_id: params.vehicleId,
       market_vault_address: params.marketVaultAddress,
+      market_id_string: params.marketIdString,
       freeze_time: params.freezeTime.toISOString(),
       predicted_arrival_seconds: params.predictedArrivalSeconds,
       status: 'ACTIVE',
