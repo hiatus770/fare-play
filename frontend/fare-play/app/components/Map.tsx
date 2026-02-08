@@ -79,8 +79,8 @@ const Map = () => {
         if (!map.current) return;
 
         const routeEndpoints = [
-            { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/10/query?where=1=1&outFields=*&f=geojson", type: "bus", color: "#0088CE", width: 1.5 },
-            { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/11/query?where=1=1&outFields=*&f=geojson", type: "subway", color: "#DA2128", width: 4 },
+            { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/10/query?where=1=1&outFields=*&f=geojson", type: "bus", color: "#0088CE", width: 2.5 },
+            { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/11/query?where=1=1&outFields=*&f=geojson", type: "subway", color: "#DA2128", width: 2.5 },
             { url: "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial7/FeatureServer/12/query?where=1=1&outFields=*&f=geojson", type: "streetcar", color: "#F8B22D", width: 2.5 }
         ];
 
@@ -221,18 +221,18 @@ const Map = () => {
             el.style.borderRadius = '50%';
             const SELECTED_COLOR = '#000000';
 
-el.style.backgroundColor =
-  selectedStop?.tag === stop.tag ? SELECTED_COLOR : '#ffffff';
+            el.style.backgroundColor =
+                selectedStop?.tag === stop.tag ? SELECTED_COLOR : '#ffffff';
 
-el.style.border =
-  '2px solid ' + (selectedStop?.tag === stop.tag ? SELECTED_COLOR : '#333');
+            el.style.border =
+                '2px solid ' + (selectedStop?.tag === stop.tag ? SELECTED_COLOR : '#333');
 
             el.style.cursor = 'pointer';
             el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
 
             el.addEventListener('mouseenter', () => {
                 el.style.backgroundColor = '#000000';
-  el.style.borderColor = '#000000';
+                el.style.borderColor = '#000000';
             });
 
             el.addEventListener('mouseleave', () => {
@@ -321,17 +321,18 @@ el.style.border =
                 right: "24px",
                 background: "#ffffff",
                 borderRadius: "12px",
-                padding: "16px 20px",
+                padding: "16px 24px",
                 color: "#1a1a1a",
                 boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
                 border: "2px solid #e9ecef",
                 zIndex: 5,
                 fontSize: "13px",
+                minWidth: "180px",
             }}>
                 <div style={{ fontWeight: 600, marginBottom: "12px", color: "#1a1a1a" }}>Map Legend</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "24px", height: "4px", background: "#DA2128", borderRadius: "2px" }}></div>
+                        <div style={{ width: "24px", height: "3px", background: "#DA2128", borderRadius: "2px" }}></div>
                         <span>Subway</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -339,7 +340,7 @@ el.style.border =
                         <span>Streetcar</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        <div style={{ width: "24px", height: "2px", background: "#0088CE", borderRadius: "2px" }}></div>
+                        <div style={{ width: "24px", height: "3px", background: "#0088CE", borderRadius: "2px" }}></div>
                         <span>Bus</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "4px" }}>
