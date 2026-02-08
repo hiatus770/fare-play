@@ -406,7 +406,7 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
             padding: "8px 0",
             background: "none",
             border: "none",
-            color: "#0088CE",
+            color: "#000",
             cursor: "pointer",
             fontSize: "14px",
             marginBottom: "16px",
@@ -1005,6 +1005,10 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                         color: selectedRoute?.color || "#0088CE",
                         fontWeight: "700",
                         fontSize: "18px",
+                        whiteSpace: "nowrap",
+                        marginLeft: "16px",
+                        minWidth: "72px",
+                        textAlign: "right",
                       }}>
                         {pred.current_eta_display}
                       </div>

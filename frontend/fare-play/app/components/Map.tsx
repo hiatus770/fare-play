@@ -219,14 +219,20 @@ const Map = () => {
             el.style.width = '14px';
             el.style.height = '14px';
             el.style.borderRadius = '50%';
-            el.style.backgroundColor = selectedStop?.tag === stop.tag ? '#4ECDC4' : '#ffffff';
-            el.style.border = '2px solid ' + (selectedStop?.tag === stop.tag ? '#4ECDC4' : '#333');
+            const SELECTED_COLOR = '#000000';
+
+el.style.backgroundColor =
+  selectedStop?.tag === stop.tag ? SELECTED_COLOR : '#ffffff';
+
+el.style.border =
+  '2px solid ' + (selectedStop?.tag === stop.tag ? SELECTED_COLOR : '#333');
+
             el.style.cursor = 'pointer';
             el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)';
 
             el.addEventListener('mouseenter', () => {
-                el.style.backgroundColor = '#4ECDC4';
-                el.style.borderColor = '#4ECDC4';
+                el.style.backgroundColor = '#000000';
+  el.style.borderColor = '#000000';
             });
 
             el.addEventListener('mouseleave', () => {
