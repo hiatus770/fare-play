@@ -1,4 +1,5 @@
-import SolanaConnectionTest from './components/solana-connection-test';
+"use client";
+import Map from "./components/Map";
 import BusPredictionMarket from './components/bus-prediction-market';
 import { VaultCard } from './components/vault-card';
 import AuthStatus from './components/auth-status';
@@ -11,6 +12,7 @@ export default function Home() {
           <div className="space-y-8">
             <AuthStatus />
             <SolanaConnectionTest />
+            <Map></Map>
             <VaultCard />
           </div>
           <div className="lg:col-span-2">
