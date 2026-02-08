@@ -1,21 +1,28 @@
 import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '../../../../lib/supabase-admin';
+import { supabaseAdmin, isSupabaseConfigured } from '../../../../lib/supabase-admin';
 import { classifyOutcome } from '../../../../lib/lmsr';
 
 const CANCEL_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 // GET /api/cron/resolve — auto-resolve expired markets using TTC data
 export async function GET() {
-  // Fetch open markets past their closes_at time
-  const { data: markets, error } = await supabaseAdmin
-    .from('lmsr_markets')
-    .select('*')
-    .eq('status', 'open')
-    .lt('closes_at', new Date().toISOString());
+  try {
+    // Return early if Supabase not configured
+    if (!isSupabaseConfigured()) {
+      return NextResponse.json({ processed: 0, results: [], note: 'Supabase not configured' });
+    }
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+    // Fetch open markets past their closes_at time
+    const { data: markets, error } = await supabaseAdmin
+      .from('lmsr_markets')
+      .select('*')
+      .eq('status', 'open')
+      .lt('closes_at', new Date().toISOString());
+
+    if (error) {
+      console.error('Error fetching markets for resolution:', error);
+      return NextResponse.json({ processed: 0, results: [], error: error.message });
+    }
 
   const results: Array<{ market_id: string; action: string; outcome?: string }> = [];
 
@@ -74,4 +81,8 @@ export async function GET() {
   }
 
   return NextResponse.json({ processed: results.length, results });
+  } catch (error: any) {
+    console.error('Error in market resolution:', error);
+    return NextResponse.json({ processed: 0, results: [], error: error.message }, { status: 500 });
+  }
 }

@@ -14,20 +14,32 @@ import {
 } from "@solana/kit";
 import { VAULT_PROGRAM_ADDRESS } from "../programs";
 
-/** VaultAlreadyExists: Vault already exists */
-export const VAULT_ERROR__VAULT_ALREADY_EXISTS = 0x1770; // 6000
 /** InvalidAmount: Invalid amount */
-export const VAULT_ERROR__INVALID_AMOUNT = 0x1771; // 6001
+export const VAULT_ERROR__INVALID_AMOUNT = 0x1770; // 6000
+/** InvalidMarketId: Invalid market ID */
+export const VAULT_ERROR__INVALID_MARKET_ID = 0x1771; // 6001
+/** TooManyPayouts: Too many payouts in single transaction */
+export const VAULT_ERROR__TOO_MANY_PAYOUTS = 0x1772; // 6002
+/** InsufficientFunds: Insufficient funds */
+export const VAULT_ERROR__INSUFFICIENT_FUNDS = 0x1773; // 6003
+/** Overflow: Arithmetic overflow */
+export const VAULT_ERROR__OVERFLOW = 0x1774; // 6004
 
 export type VaultError =
+  | typeof VAULT_ERROR__INSUFFICIENT_FUNDS
   | typeof VAULT_ERROR__INVALID_AMOUNT
-  | typeof VAULT_ERROR__VAULT_ALREADY_EXISTS;
+  | typeof VAULT_ERROR__INVALID_MARKET_ID
+  | typeof VAULT_ERROR__OVERFLOW
+  | typeof VAULT_ERROR__TOO_MANY_PAYOUTS;
 
 let vaultErrorMessages: Record<VaultError, string> | undefined;
 if (process.env.NODE_ENV !== "production") {
   vaultErrorMessages = {
+    [VAULT_ERROR__INSUFFICIENT_FUNDS]: `Insufficient funds`,
     [VAULT_ERROR__INVALID_AMOUNT]: `Invalid amount`,
-    [VAULT_ERROR__VAULT_ALREADY_EXISTS]: `Vault already exists`,
+    [VAULT_ERROR__INVALID_MARKET_ID]: `Invalid market ID`,
+    [VAULT_ERROR__OVERFLOW]: `Arithmetic overflow`,
+    [VAULT_ERROR__TOO_MANY_PAYOUTS]: `Too many payouts in single transaction`,
   };
 }
 

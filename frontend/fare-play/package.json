@@ -10,6 +10,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint",
+    "resolver": "tsx workers/market-resolver.ts",
     "setup": "npm run anchor-build && npm run codama:js",
     "start": "next start"
   },
@@ -29,7 +30,10 @@
     "@solana/client": "^1.2.0",
     "@solana/kit": "^5.1.0",
     "@solana/react-hooks": "^1.1.5",
+    "@solana/wallet-standard-features": "^1.3.0",
+    "@solana/wallet-standard-wallet-adapter-react": "^1.1.4",
     "@supabase/supabase-js": "^2.95.3",
+    "@wallet-standard/react": "^1.0.1",
     "mapbox-gl": "^3.18.1",
     "next": "16.0.10",
     "react": "19.2.3",
@@ -48,6 +52,7 @@
     "eslint-config-next": "16.0.10",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
+    "tsx": "^4.19.0",
     "typescript": "^5"
   }
 }

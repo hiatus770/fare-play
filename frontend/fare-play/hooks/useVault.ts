@@ -13,12 +13,13 @@ import {
   type Address,
 } from "@solana/kit";
 import {
-  getDepositInstructionAsync,
-  getWithdrawInstructionAsync,
+  getDepositInstructionDataEncoder,
+  getWithdrawInstructionDataEncoder,
   VAULT_PROGRAM_ADDRESS,
 } from "../app/generated/vault";
 
 const LAMPORTS_PER_SOL = 1_000_000_000n;
+const SYSTEM_PROGRAM_ADDRESS = "11111111111111111111111111111111" as Address;
 
 export function useVault() {
   const { wallet, status } = useWalletConnection();
@@ -70,10 +71,18 @@ export function useVault() {
           Math.floor(parseFloat(amount) * Number(LAMPORTS_PER_SOL))
         );
 
-        const instruction = await getDepositInstructionAsync({
-          signer: wallet.account,
-          amount: depositAmount,
-        });
+        // Manually construct instruction (like VaultCard)
+        const instruction = {
+          programAddress: VAULT_PROGRAM_ADDRESS,
+          accounts: [
+            { address: walletAddress!, role: 3 }, // WritableSigner
+            { address: vaultAddress!, role: 1 }, // Writable
+            { address: SYSTEM_PROGRAM_ADDRESS, role: 0 }, // Readonly
+          ],
+          data: getDepositInstructionDataEncoder().encode({
+            amount: depositAmount,
+          }),
+        };
 
         setTxStatus("Awaiting signature...");
 
@@ -123,9 +132,16 @@ export function useVault() {
     try {
       setTxStatus("Building transaction...");
 
-      const instruction = await getWithdrawInstructionAsync({
-        signer: wallet.account,
-      });
+      // Manually construct instruction (like VaultCard)
+      const instruction = {
+        programAddress: VAULT_PROGRAM_ADDRESS,
+        accounts: [
+          { address: walletAddress!, role: 3 }, // WritableSigner
+          { address: vaultAddress!, role: 1 }, // Writable
+          { address: SYSTEM_PROGRAM_ADDRESS, role: 0 }, // Readonly
+        ],
+        data: getWithdrawInstructionDataEncoder().encode({}),
+      };
 
       setTxStatus("Awaiting signature...");
 

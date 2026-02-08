@@ -22,7 +22,7 @@ const LAMPORTS_PER_SOL = 1_000_000_000n;
 const SYSTEM_PROGRAM_ADDRESS = "11111111111111111111111111111111" as Address;
 
 export function VaultCard() {
-  const { wallet, status } = useWalletConnection();
+  const { wallet, status } = useWalletConnection(); 
   const { send, isSending } = useSendTransaction();
 
   const [amount, setAmount] = useState("");

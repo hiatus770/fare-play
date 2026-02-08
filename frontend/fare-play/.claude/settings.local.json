@@ -7,7 +7,23 @@
       "Bash(solana --version:*)",
       "Bash(anchor --version:*)",
       "Bash(cargo --version:*)",
-      "Bash(where:*)"
+      "Bash(where:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(anchor build:*)",
+      "Bash(npx codama render:*)",
+      "Bash(npx codama:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(gh api:*)",
+      "Bash(npm run anchor-build:*)",
+      "Bash(npm run:*)",
+      "Bash(anchor deploy:*)",
+      "Bash(solana balance:*)",
+      "Bash(solana airdrop:*)",
+      "Bash(solana program deploy:*)"
     ]
   }
 }

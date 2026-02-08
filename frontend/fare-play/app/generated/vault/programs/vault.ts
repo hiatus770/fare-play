@@ -18,8 +18,14 @@ import {
 } from "@solana/kit";
 import {
   parseDepositInstruction,
+  parseDistributePayoutsInstruction,
+  parsePlaceBetInstruction,
+  parseRefundMarketInstruction,
   parseWithdrawInstruction,
   type ParsedDepositInstruction,
+  type ParsedDistributePayoutsInstruction,
+  type ParsedPlaceBetInstruction,
+  type ParsedRefundMarketInstruction,
   type ParsedWithdrawInstruction,
 } from "../instructions";
 
@@ -28,6 +34,9 @@ export const VAULT_PROGRAM_ADDRESS =
 
 export enum VaultInstruction {
   Deposit,
+  DistributePayouts,
+  PlaceBet,
+  RefundMarket,
   Withdraw,
 }
 
@@ -45,6 +54,39 @@ export function identifyVaultInstruction(
     )
   ) {
     return VaultInstruction.Deposit;
+  }
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([226, 196, 33, 224, 8, 117, 184, 243]),
+      ),
+      0,
+    )
+  ) {
+    return VaultInstruction.DistributePayouts;
+  }
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([222, 62, 67, 220, 63, 166, 126, 33]),
+      ),
+      0,
+    )
+  ) {
+    return VaultInstruction.PlaceBet;
+  }
+  if (
+    containsBytes(
+      data,
+      fixEncoderSize(getBytesEncoder(), 8).encode(
+        new Uint8Array([236, 178, 184, 162, 130, 179, 37, 35]),
+      ),
+      0,
+    )
+  ) {
+    return VaultInstruction.RefundMarket;
   }
   if (
     containsBytes(
@@ -69,6 +111,15 @@ export type ParsedVaultInstruction<
       instructionType: VaultInstruction.Deposit;
     } & ParsedDepositInstruction<TProgram>)
   | ({
+      instructionType: VaultInstruction.DistributePayouts;
+    } & ParsedDistributePayoutsInstruction<TProgram>)
+  | ({
+      instructionType: VaultInstruction.PlaceBet;
+    } & ParsedPlaceBetInstruction<TProgram>)
+  | ({
+      instructionType: VaultInstruction.RefundMarket;
+    } & ParsedRefundMarketInstruction<TProgram>)
+  | ({
       instructionType: VaultInstruction.Withdraw;
     } & ParsedWithdrawInstruction<TProgram>);
 
@@ -82,6 +133,27 @@ export function parseVaultInstruction<TProgram extends string>(
       return {
         instructionType: VaultInstruction.Deposit,
         ...parseDepositInstruction(instruction),
+      };
+    }
+    case VaultInstruction.DistributePayouts: {
+      assertIsInstructionWithAccounts(instruction);
+      return {
+        instructionType: VaultInstruction.DistributePayouts,
+        ...parseDistributePayoutsInstruction(instruction),
+      };
+    }
+    case VaultInstruction.PlaceBet: {
+      assertIsInstructionWithAccounts(instruction);
+      return {
+        instructionType: VaultInstruction.PlaceBet,
+        ...parsePlaceBetInstruction(instruction),
+      };
+    }
+    case VaultInstruction.RefundMarket: {
+      assertIsInstructionWithAccounts(instruction);
+      return {
+        instructionType: VaultInstruction.RefundMarket,
+        ...parseRefundMarketInstruction(instruction),
       };
     }
     case VaultInstruction.Withdraw: {

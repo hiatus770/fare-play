@@ -1,9 +1,20 @@
 "use client";
 import React, { useState, useEffect } from "react";
+import { useWalletConnection, useSendTransaction } from "@solana/react-hooks";
 import { MarketList } from "./market-list";
 import { BetPanel } from "./bet-panel";
 import { CreateMarketPanel } from "./create-market-panel";
 import type { MarketData } from "../../hooks/useMarkets";
+import {
+  getDepositInstructionDataEncoder,
+  VAULT_PROGRAM_ADDRESS
+} from "../generated/vault";
+import {
+  getProgramDerivedAddress,
+  getAddressEncoder,
+  getBytesEncoder,
+  type Address,
+} from "@solana/kit";
 
 interface RouteOption {
   tag: string;
@@ -61,6 +72,7 @@ const STREETCAR_ROUTES = ["501", "504", "505", "506", "509", "510", "511", "512"
 const NEARBY_ROUTES = ["501", "504", "505", "506", "509", "510", "511", "512"];
 
 const LAMPORTS_PER_SOL = 1_000_000_000;
+const SYSTEM_PROGRAM_ADDRESS = "11111111111111111111111111111111" as Address;
 
 const StopSidebar: React.FC<StopSidebarProps> = ({
   selectedStop: externalStop,
@@ -71,10 +83,15 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
   resolvedMarkets = [],
   marketsLoading = false,
   refetchMarkets,
-  walletAddress,
+  walletAddress: externalWalletAddress,
   offChainBalance = 0,
   refetchBalance,
 }) => {
+  // Wallet hooks
+  const { wallet, connected } = useWalletConnection();
+  const { send, isSending } = useSendTransaction();
+  const walletAddress = wallet?.account.address || externalWalletAddress;
+
   const [routes, setRoutes] = useState<RouteOption[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<RouteOption | null>(null);
   const [stops, setStops] = useState<Stop[]>([]);
@@ -98,6 +115,8 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
   const [nearbyStops, setNearbyStops] = useState<(Stop & { distance: number; routeTag: string })[]>([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [currentMarket, setCurrentMarket] = useState<any>(null);
+  const [marketLoading, setMarketLoading] = useState(false);
 
   // Cache for route stops to avoid re-fetching
   const [routeStopsCache, setRouteStopsCache] = useState<Record<string, any[]>>({});
@@ -340,22 +359,171 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
       return;
     }
 
+    if (!connected || !walletAddress) {
+      setError("Please connect your wallet first");
+      return;
+    }
+
+    const predictedArrivalSeconds = parseInt(selectedTime);
+    const amountLamports = Math.floor(parseFloat(betAmount) * LAMPORTS_PER_SOL);
+
+    if (amountLamports <= 0) {
+      setError("Bet amount must be greater than 0");
+      return;
+    }
+
     setLoading(true);
+    setError("");
+
     try {
-      console.log("Placing bet:", {
-        route: selectedRoute?.tag,
-        stop: selectedStop.tag,
-        vehicle: selectedVehicle,
-        predictedTime: selectedTime,
-        betAmount: betAmount,
+      console.log("📊 Creating/finding market...");
+
+      // 1. Get TTC prediction for this vehicle
+      const ttcPrediction = predictions.find(p => p.vehicle_id === selectedVehicle);
+      if (!ttcPrediction) {
+        setError("Could not find prediction for selected vehicle");
+        return;
+      }
+
+      // 2. Create or get existing market
+      const marketRes = await fetch('/api/betting/markets/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          route: selectedRoute?.tag,
+          stopTag: selectedStop.tag,
+          vehicleId: selectedVehicle,
+          predictedArrivalSeconds: ttcPrediction.current_eta_seconds,
+        })
       });
 
-      setSuccess("Bet placed successfully!");
+      if (!marketRes.ok) {
+        const errorData = await marketRes.json();
+        throw new Error(errorData.error || 'Failed to create market');
+      }
+
+      const { marketId, marketVaultAddress, freezeTime } = await marketRes.json();
+      console.log("✓ Market ready:", marketId);
+
+      // Check if market is frozen
+      const freezeDate = new Date(freezeTime);
+      if (new Date() >= freezeDate) {
+        setError("This market has frozen, betting is closed");
+        return;
+      }
+
+      // 3. Build bet transaction
+      console.log("📝 Building bet transaction...");
+      const betRes = await fetch('/api/betting/bets/place', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          walletAddress,
+          marketId,
+          predictedArrivalSeconds,
+          amountLamports,
+        })
+      });
+
+      if (!betRes.ok) {
+        const errorData = await betRes.json();
+        throw new Error(errorData.error || 'Failed to create bet transaction');
+      }
+
+      const { instruction, userId } = await betRes.json();
+      console.log("✓ Transaction built");
+
+      // 4. Derive user vault PDA
+      console.log("🔐 Deriving vault address...");
+      const [userVaultPda] = await getProgramDerivedAddress({
+        programAddress: VAULT_PROGRAM_ADDRESS,
+        seeds: [
+          getBytesEncoder().encode(new Uint8Array([118, 97, 117, 108, 116])), // "vault"
+          getAddressEncoder().encode(walletAddress as Address),
+        ],
+      });
+      console.log("✓ User vault PDA:", userVaultPda);
+
+      // 5. Create deposit instruction
+      console.log("💰 Creating deposit instruction...");
+      const depositInstruction = {
+        programAddress: VAULT_PROGRAM_ADDRESS,
+        accounts: [
+          { address: walletAddress as Address, role: 3 }, // WritableSigner
+          { address: userVaultPda, role: 1 }, // Writable
+          { address: SYSTEM_PROGRAM_ADDRESS, role: 0 }, // Readonly
+        ],
+        data: getDepositInstructionDataEncoder().encode({
+          amount: BigInt(amountLamports),
+        }),
+      };
+
+      // 6. Sign and send BOTH instructions in one transaction
+      console.log("✍️ Requesting signature for deposit + bet...");
+      console.log("Instructions:", [
+        { type: "deposit", accounts: depositInstruction.accounts.length },
+        { type: "place_bet", accounts: instruction.accounts.length }
+      ]);
+
+      let signature: string;
+      try {
+        signature = await send({
+          instructions: [
+            depositInstruction, // First: deposit funds into vault
+            {                    // Second: place the bet
+              programAddress: instruction.programAddress,
+              accounts: instruction.accounts,
+              data: new Uint8Array(instruction.data),
+            }
+          ],
+        });
+        console.log("✓ Transaction signed:", signature);
+      } catch (txError: any) {
+        console.error("❌ Transaction failed:", {
+          message: txError.message,
+          transactionPlanResult: txError.transactionPlanResult,
+          cause: txError.cause,
+          fullError: txError,
+        });
+        throw txError;
+      }
+
+      // 7. Confirm bet in database
+      console.log("💾 Confirming bet...");
+      const confirmRes = await fetch('/api/betting/bets/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          marketId,
+          userId,
+          walletAddress,
+          predictedArrivalSeconds,
+          amountLamports,
+          signature,
+        })
+      });
+
+      if (!confirmRes.ok) {
+        const errorData = await confirmRes.json();
+        throw new Error(errorData.error || 'Failed to confirm bet');
+      }
+
+      const { betId } = await confirmRes.json();
+      console.log("✅ Bet confirmed:", betId);
+
+      setSuccess(`✅ Bet placed! ${betAmount} SOL on ${predictedArrivalSeconds}s arrival (deposited + bet in 1 tx)`);
       setBetAmount("");
       setSelectedTime("");
-      setTimeout(() => setSuccess(""), 3000);
-    } catch (err) {
-      setError(`Failed to place bet: ${err}`);
+
+      // Refresh balance if available
+      if (refetchBalance) {
+        refetchBalance();
+      }
+
+      setTimeout(() => setSuccess(""), 5000);
+    } catch (err: any) {
+      console.error("❌ Bet failed:", err);
+      setError(`Failed to place bet: ${err.message || err}`);
     } finally {
       setLoading(false);
     }
@@ -371,6 +539,60 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
     refetchMarkets?.();
     refetchBalance?.();
   };
+
+  // Fetch market info for selected vehicle
+  useEffect(() => {
+    if (!selectedVehicle || !selectedRoute || !selectedStop) {
+      setCurrentMarket(null);
+      return;
+    }
+
+    const fetchMarketInfo = async () => {
+      setMarketLoading(true);
+      try {
+        // Try to get existing market for this vehicle
+        const ttcPrediction = predictions.find(p => p.vehicle_id === selectedVehicle);
+        if (!ttcPrediction) return;
+
+        const res = await fetch('/api/betting/markets/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            route: selectedRoute.tag,
+            stopTag: selectedStop.tag,
+            vehicleId: selectedVehicle,
+            predictedArrivalSeconds: ttcPrediction.current_eta_seconds,
+          })
+        });
+
+        if (res.ok) {
+          const marketData = await res.json();
+
+          // Fetch market details to get bet count and pool
+          const detailsRes = await fetch(`/api/betting/markets/${marketData.marketId}`);
+          if (detailsRes.ok) {
+            const details = await detailsRes.json();
+            setCurrentMarket({
+              ...marketData,
+              ...details.market,
+              stats: details.stats,
+            });
+          } else {
+            setCurrentMarket(marketData);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching market info:', err);
+      } finally {
+        setMarketLoading(false);
+      }
+    };
+
+    fetchMarketInfo();
+    // Refresh every 10 seconds
+    const interval = setInterval(fetchMarketInfo, 10000);
+    return () => clearInterval(interval);
+  }, [selectedVehicle, selectedRoute, selectedStop, predictions]);
 
   // Fetch my bets when tab switches
   useEffect(() => {
@@ -953,6 +1175,80 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
             </div>
           )}
 
+          {/* Market Info Display */}
+          {selectedVehicle && currentMarket && (
+            <div style={{
+              background: "linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%)",
+              borderRadius: "12px",
+              padding: "16px",
+              marginBottom: "16px",
+              border: "2px solid #dee2e6",
+            }}>
+              <div style={{ fontWeight: 600, fontSize: "14px", marginBottom: "12px", color: "#495057" }}>
+                📊 Market Info
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <div style={{ fontSize: "11px", color: "#6c757d", marginBottom: "4px", textTransform: "uppercase" }}>
+                    Total Pool
+                  </div>
+                  <div style={{ fontSize: "18px", fontWeight: "700", color: "#1a1a1a" }}>
+                    {currentMarket.stats?.totalPool
+                      ? (Number(currentMarket.stats.totalPool) / LAMPORTS_PER_SOL).toFixed(4)
+                      : "0.0000"} SOL
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: "11px", color: "#6c757d", marginBottom: "4px", textTransform: "uppercase" }}>
+                    Bets Placed
+                  </div>
+                  <div style={{ fontSize: "18px", fontWeight: "700", color: "#1a1a1a" }}>
+                    {currentMarket.stats?.totalBets || 0}
+                  </div>
+                </div>
+
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <div style={{ fontSize: "11px", color: "#6c757d", marginBottom: "4px", textTransform: "uppercase" }}>
+                    {currentMarket.stats?.isFrozen ? "Market Frozen" : "Freezes In"}
+                  </div>
+                  <div style={{
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    color: currentMarket.stats?.isFrozen
+                      ? "#DA2128"
+                      : currentMarket.stats?.secondsUntilFreeze < 60
+                        ? "#F8B22D"
+                        : "#0088CE"
+                  }}>
+                    {currentMarket.stats?.isFrozen
+                      ? "Betting Closed"
+                      : currentMarket.stats?.secondsUntilFreeze
+                        ? `${Math.floor(currentMarket.stats.secondsUntilFreeze / 60)}m ${currentMarket.stats.secondsUntilFreeze % 60}s`
+                        : "Loading..."}
+                  </div>
+                </div>
+              </div>
+
+              {currentMarket.stats?.predictionDistribution && (
+                <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #dee2e6" }}>
+                  <div style={{ fontSize: "11px", color: "#6c757d", marginBottom: "6px", textTransform: "uppercase" }}>
+                    Prediction Range
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#495057" }}>
+                    {currentMarket.stats.minPrediction}s - {currentMarket.stats.maxPrediction}s
+                    {currentMarket.stats.avgPrediction && (
+                      <span style={{ color: "#6c757d" }}>
+                        {" "}(avg: {Math.round(currentMarket.stats.avgPrediction)}s)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Bet Amount */}
           {selectedVehicle && selectedTime && (
             <div style={{
@@ -995,11 +1291,13 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
 
               <button
                 onClick={handleBet}
-                disabled={loading}
+                disabled={loading || isSending || !connected || currentMarket?.stats?.isFrozen}
                 style={{
                   width: "100%",
                   padding: "16px",
-                  background: `linear-gradient(135deg, ${selectedRoute?.color || "#DA2128"} 0%, ${selectedRoute?.color || "#DA2128"} 100%)`,
+                  background: loading || isSending || !connected || currentMarket?.stats?.isFrozen
+                    ? "#6c757d"
+                    : `linear-gradient(135deg, ${selectedRoute?.color || "#DA2128"} 0%, ${selectedRoute?.color || "#DA2128"} 100%)`,
                   color: "#ffffff",
                   border: "none",
                   borderRadius: "10px",
@@ -1021,7 +1319,13 @@ const StopSidebar: React.FC<StopSidebarProps> = ({
                   e.currentTarget.style.boxShadow = "0 2px 8px rgba(218, 33, 40, 0.25)";
                 }}
               >
-                {loading ? "Placing bet..." : "Place Bet"}
+                {!connected
+                  ? "Connect Wallet First"
+                  : currentMarket?.stats?.isFrozen
+                    ? "Market Frozen"
+                    : loading || isSending
+                      ? "Placing Bet..."
+                      : `Place Bet (${betAmount || "0"} SOL)`}
               </button>
             </div>
           )}

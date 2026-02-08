@@ -7,4 +7,7 @@
  */
 
 export * from "./deposit";
+export * from "./distributePayouts";
+export * from "./placeBet";
+export * from "./refundMarket";
 export * from "./withdraw";
